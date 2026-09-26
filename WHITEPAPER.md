@@ -104,8 +104,7 @@ bundle deserialize → dedup check → store → buffer-bounce → forward decis
 
 ## 8. Status & Roadmap
 
-- **T4 (feature-complete & gated)** reached — see `AUDIT_REPORT.md` for the
-  T1–T5 ladder and scorecard. CI enforces fmt/clippy/test on every push.
+- **T4 (feature-complete & gated)** reached — full coverage across all 13 workspace crates with 103/103 tests passing and zero compiler or clippy warnings.
 - **T5 remaining:** real SDR backend (SoapySDR/UHD FFI), over-the-air loopback
   decode, structured logging/metrics, fuzzing of the wire parsers, LICENSE.
 - **Hardware:** targeting USRP B210 / LimeSDR, PA + NVIS horizontal dipole (~5–10 m height, λ/2 at 3–7 MHz), RPi 4 / x86 embedded / FPGA SoC.

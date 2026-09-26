@@ -7,8 +7,8 @@
 //!
 //! ## Architecture
 //!
-//! See `PROGRESS_LOG.md` for build status and `ABOS_Building_Plan.md` for
-//! the full architecture specification.
+//! See `WHITEPAPER.md` or the documentation portal (`docs.html`) for
+//! the complete system specification and RF chain design.
 
 use abos_hal::dma::DMABuffer;
 use abos_hal::gpio::GPIO;

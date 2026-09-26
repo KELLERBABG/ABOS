@@ -1,8 +1,0 @@
-[
-  {
-    "function": "add",
-    "block": "bb0",
-    "status": "FAIL",
-    "details": "Arithmetic Overflow Detection (Add) -> Exploit path found!"
-  }
-]

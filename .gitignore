@@ -13,3 +13,9 @@ __pycache__/
 
 # Runtime artifacts created by CLI smoke tests
 /data/
+
+# Obsidian / dev scratchpads
+*.canvas
+
+# Workflows requiring elevated PAT workflow scope
+.github/

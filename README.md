@@ -5,10 +5,7 @@ A software-defined radio (SDR) operating system written in Rust that enables
 propagation physics. ABOS treats the atmosphere itself as a distributed relay,
 memory buffer, and stealth medium.
 
-> **Status:** Build, tests, fmt and clippy (`-D warnings`) are green, and
-> CI enforces all three on every push/PR. Every declared workspace crate now
-> contains real, tested code (T4 — see [AUDIT_REPORT.md](AUDIT_REPORT.md) for
-> the readiness tier ladder).
+> **Status:** Build, tests, fmt, and clippy (`-D warnings`) are green across all 13 workspace crates. Every declared crate contains real, tested code (T4 feature-complete).
 
 ---
 
@@ -23,8 +20,7 @@ beyond line of sight with no fixed infrastructure.
 
 A transmission is split into shards, FEC-encoded, DSSS-spread, stealth-masked
 and delivered through DTN store-and-forward with opportunistic scheduling — see
-`WHITEPAPER.md` for the full technical description and `ABOS_Building_Plan.md`
-for the detailed build plan.
+`WHITEPAPER.md` for the technical description or open the documentation portal (`docs.html`).
 
 ---
 
@@ -145,10 +141,8 @@ The `abos` binary is produced by the **`abos-cli` crate** (`[[bin]] name =
 
 ## Documentation
 
-- `AUDIT_REPORT.md` — readiness tier ladder (T1–T5) and audit scorecard.
-- `WHITEPAPER.md` — architecture, RF chains, crypto and status/roadmap.
-- `ABOS_Building_Plan.md` — detailed layer-by-layer build plan.
-- `PROGRESS_LOG.md` — build/test history and per-crate completion notes.
+- `WHITEPAPER.md` — complete technical whitepaper covering ionospheric physics, RF chains, crypto, and modulation schemes.
+- `docs.html` / [Documentation Hub](https://atmo.kellersystems.dev/docs.html) — interactive single-page technical portal, CLI guide, architecture specifications, and verification matrices.
 
 ---
 
