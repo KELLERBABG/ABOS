@@ -1,14 +1,14 @@
 use num_complex::Complex64;
 
-use abos_dsp::ddc::DDC;
 use abos_dsp::agc::AGC;
-use abos_dsp::iq_correct::IQCorrect;
 use abos_dsp::costas::CostasLoop;
-use abos_dsp::timing::GardnerTiming;
-use abos_dsp::decimation::{FIRFilter, Decimator};
-use abos_dsp::pulse_shape::RRCFilter;
+use abos_dsp::ddc::DDC;
+use abos_dsp::decimation::{Decimator, FIRFilter};
 use abos_dsp::fft;
-use abos_dsp::ofdm::{OFDMModulator, OFDMDemodulator};
+use abos_dsp::iq_correct::IQCorrect;
+use abos_dsp::ofdm::{OFDMDemodulator, OFDMModulator};
+use abos_dsp::pulse_shape::RRCFilter;
+use abos_dsp::timing::GardnerTiming;
 
 #[test]
 fn test_ddc_shifts_frequency() {
@@ -69,9 +69,7 @@ fn test_costas_loop_converges() {
 #[test]
 fn test_gardner_timing_produces_output() {
     let mut timing = GardnerTiming::new(4);
-    let samples = vec![
-        Complex64::new(1.0, 1.0); 20
-    ];
+    let samples = vec![Complex64::new(1.0, 1.0); 20];
     let result = timing.process(&samples);
     assert!(!result.is_empty());
 }
@@ -139,10 +137,12 @@ fn test_ofdm_modulate_demodulate_roundtrip() {
     let mut modu = OFDMModulator::new(n_subcarriers, cp_length, pilots.clone());
     let mut demod = OFDMDemodulator::new(n_subcarriers, cp_length, pilots);
 
-    let symbols: Vec<Complex64> = (0..60).map(|i| {
-        let phase = 2.0 * std::f64::consts::PI * i as f64 / 60.0;
-        Complex64::new(phase.cos(), phase.sin())
-    }).collect();
+    let symbols: Vec<Complex64> = (0..60)
+        .map(|i| {
+            let phase = 2.0 * std::f64::consts::PI * i as f64 / 60.0;
+            Complex64::new(phase.cos(), phase.sin())
+        })
+        .collect();
 
     let tx_signal = modu.modulate(&symbols);
     assert_eq!(tx_signal.len(), n_subcarriers + cp_length);

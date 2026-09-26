@@ -5,17 +5,22 @@ pub struct GPIO {
     pins: [u8; 6],
 }
 
+impl Default for GPIO {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GPIO {
     pub fn new() -> Self {
-        Self { pins: [17, 18, 22, 23, 24, 25] }
+        Self {
+            pins: [17, 18, 22, 23, 24, 25],
+        }
     }
     pub fn with_pins(pins: [u8; 6]) -> Self {
         Self { pins }
     }
-    pub fn set_antenna(&self, _port: u8) {
-    }
-    pub fn set_pa_enable(&self, _enabled: bool) {
-    }
-    pub fn set_tr_switch(&self, _tx_mode: bool) {
-    }
+    pub fn set_antenna(&self, _port: u8) {}
+    pub fn set_pa_enable(&self, _enabled: bool) {}
+    pub fn set_tr_switch(&self, _tx_mode: bool) {}
 }

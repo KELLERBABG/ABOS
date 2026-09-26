@@ -1,7 +1,7 @@
-use abos_fec::ldpc::LDPCCode;
-use abos_fec::interleaver::Interleaver;
-use abos_fec::soft_decision::{qpsk_llr, bpsk_llr, qam16_llr};
 use abos_fec::crc::crc32;
+use abos_fec::interleaver::Interleaver;
+use abos_fec::ldpc::LDPCCode;
+use abos_fec::soft_decision::{bpsk_llr, qam16_llr, qpsk_llr};
 
 #[test]
 fn test_ldpc_encdec_roundtrip() {
@@ -63,7 +63,7 @@ fn test_interleaver_different_seeds_different_permutations() {
     let out_b = b.interleave(&input);
     // Both should be all-1s since input is all-1
     assert_eq!(out_a, out_b); // Trivially true for all-1s input
-    // But permutations should differ
+                              // But permutations should differ
     assert_ne!(a.permutation, b.permutation);
 }
 
@@ -91,7 +91,7 @@ fn test_bpsk_llr() {
 
 #[test]
 fn test_qam16_llr_basic() {
-    let (llr0, llr1, llr2, llr3) = qam16_llr(num_complex::Complex64::new(3.0, 1.0), 1.0);
+    let (llr0, _llr1, llr2, _llr3) = qam16_llr(num_complex::Complex64::new(3.0, 1.0), 1.0);
     assert!(llr0 > 0.0); // Positive on I-axis
     assert!(llr2 > 0.0); // Positive on Q-axis
 }

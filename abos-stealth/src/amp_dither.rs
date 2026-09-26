@@ -8,13 +8,19 @@ pub struct AmpDither {
 
 impl AmpDither {
     pub fn new(deviation: f64) -> Self {
-        Self { deviation, rng: rand::thread_rng() }
+        Self {
+            deviation,
+            rng: rand::thread_rng(),
+        }
     }
 
     pub fn apply_dither(&mut self, samples: &[Complex64]) -> Vec<Complex64> {
-        samples.iter().map(|&s| {
-            let scale = 1.0 + (self.rng.gen::<f64>() - 0.5) * 2.0 * self.deviation;
-            Complex64::new(s.re * scale, s.im * scale)
-        }).collect()
+        samples
+            .iter()
+            .map(|&s| {
+                let scale = 1.0 + (self.rng.gen::<f64>() - 0.5) * 2.0 * self.deviation;
+                Complex64::new(s.re * scale, s.im * scale)
+            })
+            .collect()
     }
 }

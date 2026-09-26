@@ -1,15 +1,12 @@
-use abos_common::types::*;
-use abos_common::error::Error;
 use abos_common::complex::*;
 use abos_common::crypto::*;
 use abos_common::pn_gen::*;
+use abos_common::types::*;
 
 #[test]
 fn test_qpsk_constellation() {
     let bytes = [0u8, 1, 2, 3];
-    let expected = [
-        (1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)
-    ];
+    let expected = [(1.0, 1.0), (-1.0, 1.0), (-1.0, -1.0), (1.0, -1.0)];
     for (i, &b) in bytes.iter().enumerate() {
         let sym = byte_to_qpsk(b);
         assert!((sym.re - expected[i].0).abs() < 1e-10);
@@ -63,7 +60,7 @@ fn test_reseed() {
     let mut gen = PNGenerator::new(&seed1);
     let first = gen.next_chip();
     gen.reseed(&seed2);
-    let after = gen.next_chip();
+    let _after = gen.next_chip();
     // Should be different because seed is different
     // (could theoretically be same but astronomically unlikely)
     gen.reseed(&seed1);

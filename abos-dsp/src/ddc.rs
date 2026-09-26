@@ -17,10 +17,7 @@ impl DDC {
     pub fn process(&mut self, samples: &[Complex64]) -> Vec<Complex64> {
         let mut result = Vec::with_capacity(samples.len());
         for &sample in samples {
-            let nco = Complex64::new(
-                self.nco_phase.cos(),
-                -self.nco_phase.sin(),
-            );
+            let nco = Complex64::new(self.nco_phase.cos(), -self.nco_phase.sin());
             result.push(sample * nco);
             self.nco_phase += self.phase_increment;
             if self.nco_phase >= 2.0 * std::f64::consts::PI {

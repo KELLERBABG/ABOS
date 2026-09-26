@@ -26,10 +26,7 @@ pub struct Bundle {
     pub ttl: u32,
 }
 
-/// Frequency in Hz
 pub type FrequencyHz = u64;
-
-/// Sample rate in samples per second
 pub type SampleRate = f64;
 
 /// Modulation and Coding Scheme index

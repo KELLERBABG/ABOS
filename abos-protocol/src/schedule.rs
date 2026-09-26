@@ -36,7 +36,7 @@ impl PhoenixScheduler {
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_millis() as u64
+                    .as_millis() as u64,
             );
             return true;
         }

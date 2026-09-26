@@ -5,9 +5,9 @@ pub struct FHSSEngine {
     pn_gen: PNGenerator,
     pub hop_pattern: Vec<f64>,
     pub current_hop: usize,
-    pub hop_duration: f64,          // seconds per hop
-    pub min_frequency: f64,         // Hz
-    pub max_frequency: f64,         // Hz
+    pub hop_duration: f64,  // seconds per hop
+    pub min_frequency: f64, // Hz
+    pub max_frequency: f64, // Hz
     num_hops: usize,
 }
 
@@ -21,7 +21,8 @@ impl FHSSEngine {
         num_hops: usize,
     ) -> Self {
         let mut pn_gen = PNGenerator::new(seed);
-        let hop_pattern = Self::generate_pattern(&mut pn_gen, num_hops, min_frequency, max_frequency);
+        let hop_pattern =
+            Self::generate_pattern(&mut pn_gen, num_hops, min_frequency, max_frequency);
         Self {
             pn_gen,
             hop_pattern,
@@ -33,7 +34,12 @@ impl FHSSEngine {
         }
     }
 
-    fn generate_pattern(pn_gen: &mut PNGenerator, num_hops: usize, min_f: f64, max_f: f64) -> Vec<f64> {
+    fn generate_pattern(
+        pn_gen: &mut PNGenerator,
+        num_hops: usize,
+        min_f: f64,
+        max_f: f64,
+    ) -> Vec<f64> {
         let bandwidth = max_f - min_f;
         (0..num_hops)
             .map(|_| {

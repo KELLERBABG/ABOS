@@ -1,4 +1,4 @@
-pub mod scanner;
-pub mod jammer_detect;
-pub mod whitespace;
 pub mod adapt;
+pub mod jammer_detect;
+pub mod scanner;
+pub mod whitespace;

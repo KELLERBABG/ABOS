@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use abos_common::types::*;
+use std::collections::HashMap;
 
 /// Buffer-Bounce engine implementing asynchronous store-and-forward relay
 ///
@@ -40,7 +40,6 @@ impl BufferBounceEngine {
         self.retransmit_count.entry(shard_id).or_insert(0);
     }
 
-
     /// Process an ACK for a specific shard
     /// Returns true if all complementary shards for this file have been received
     pub fn process_ack(&mut self, shard_id: [u8; 32]) -> bool {
@@ -49,15 +48,19 @@ impl BufferBounceEngine {
 
         // Check if we have enough complementary shards to reconstruct
         // (simplified: just check if we have received ACKs for all our shards)
-        let all_acked = self.pending_shards.is_empty();
-        all_acked
+
+        self.pending_shards.is_empty()
     }
 
     /// Record a complementary shard detected in the spectrum
     pub fn record_complementary_shard(&mut self, shard: Shard) {
         let index = shard.shard_index;
         // Avoid duplicates
-        if !self.complementary_shards.iter().any(|s| s.shard_index == index) {
+        if !self
+            .complementary_shards
+            .iter()
+            .any(|s| s.shard_index == index)
+        {
             self.complementary_shards.push(shard);
         }
     }

@@ -1,5 +1,5 @@
-use rand::SeedableRng;
 use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use rand_chacha::ChaCha12Rng;
 
 /// Bit-interleaved coded modulation (BICM) interleaver
@@ -32,7 +32,10 @@ impl Interleaver {
 
     /// Interleave bits: reorder according to the permutation
     pub fn interleave(&self, bits: &[u8]) -> Vec<u8> {
-        assert!(bits.len() <= self.block_size, "Bit vector exceeds block size");
+        assert!(
+            bits.len() <= self.block_size,
+            "Bit vector exceeds block size"
+        );
         let mut output = vec![0u8; self.block_size];
         for (i, &bit) in bits.iter().enumerate() {
             output[self.permutation[i]] = bit;
@@ -42,7 +45,10 @@ impl Interleaver {
 
     /// Deinterleave bits: restore original order using the inverse permutation
     pub fn deinterleave(&self, bits: &[u8]) -> Vec<u8> {
-        assert!(bits.len() <= self.block_size, "Bit vector exceeds block size");
+        assert!(
+            bits.len() <= self.block_size,
+            "Bit vector exceeds block size"
+        );
         let mut output = vec![0u8; self.block_size];
         for (i, &bit) in bits.iter().enumerate() {
             output[self.inverse_permutation[i]] = bit;

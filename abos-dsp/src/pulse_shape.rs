@@ -18,7 +18,11 @@ impl RRCFilter {
         let state_len = taps.len().saturating_sub(1);
         let state_re = vec![0.0_f64; state_len];
         let state_im = vec![0.0_f64; state_len];
-        Self { taps, state_re, state_im }
+        Self {
+            taps,
+            state_re,
+            state_im,
+        }
     }
 
     pub fn process(&mut self, samples: &[Complex64]) -> Vec<Complex64> {
@@ -53,6 +57,8 @@ pub fn rrc_tap(t: f64, samples_per_symbol: usize, alpha: f64) -> f64 {
     let num = (std::f64::consts::PI * t_sps * (1.0 - alpha)).sin()
         + 4.0 * alpha * t_sps * (std::f64::consts::PI * t_sps * (1.0 + alpha)).cos();
     let den = std::f64::consts::PI * t_sps * (1.0 - (4.0 * alpha * t_sps).powi(2));
-    if den.abs() < 1e-12 { return 0.0; }
+    if den.abs() < 1e-12 {
+        return 0.0;
+    }
     num / den
 }

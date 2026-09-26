@@ -36,7 +36,9 @@ impl GardnerTiming {
                 self.sample_count = 0;
                 let error = self.gardner_error();
                 self.interval += error * 0.1;
-                if self.interval < 1.0 { self.interval = 1.0; }
+                if self.interval < 1.0 {
+                    self.interval = 1.0;
+                }
                 self.output_buffer.push(self.last_sample);
             }
             self.strobe = !self.strobe;

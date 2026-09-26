@@ -4,8 +4,8 @@ use std::f64::consts::PI;
 /// Antenna array beamformer for steering and null-steering
 pub struct Beamformer {
     pub n_elements: usize,
-    pub spacing: f64,       // meters between elements
-    pub frequency: f64,     // Hz
+    pub spacing: f64,           // meters between elements
+    pub frequency: f64,         // Hz
     pub phase_shifts: Vec<f64>, // radians per element
     wavelength: f64,
 }
@@ -43,7 +43,11 @@ impl Beamformer {
     /// Apply beamforming: combine signals from all antenna elements
     /// Each signal in the input should be from a different element
     pub fn apply_beamforming(&self, signals: &[Vec<Complex64>]) -> Vec<Complex64> {
-        assert_eq!(signals.len(), self.n_elements, "Must have signals from all elements");
+        assert_eq!(
+            signals.len(),
+            self.n_elements,
+            "Must have signals from all elements"
+        );
 
         let n_samples = signals[0].len();
         let mut output = Vec::with_capacity(n_samples);
@@ -52,7 +56,7 @@ impl Beamformer {
             let mut sum = Complex64::new(0.0, 0.0);
             for (elem_idx, signal) in signals.iter().enumerate() {
                 let phase_shift = Complex64::from_polar(1.0, self.phase_shifts[elem_idx]);
-                sum = sum + signal[i] * phase_shift;
+                sum += signal[i] * phase_shift;
             }
             output.push(sum * (1.0 / self.n_elements as f64));
         }

@@ -10,57 +10,58 @@
 //! See `PROGRESS_LOG.md` for build status and `ABOS_Building_Plan.md` for
 //! the full architecture specification.
 
-use abos_hal::sdr::{create_sdr, SDRDevice, SDRType};
 use abos_hal::dma::DMABuffer;
 use abos_hal::gpio::GPIO;
+use abos_hal::sdr::{create_sdr, SDRDevice, SDRType};
 use abos_hal::time::GPSDOTimer;
 
-use abos_dsp::ddc::DDC;
 use abos_dsp::agc::AGC;
-use abos_dsp::iq_correct::IQCorrect;
 use abos_dsp::costas::CostasLoop;
-use abos_dsp::timing::GardnerTiming;
-use abos_dsp::ofdm::{OFDMModulator, OFDMDemodulator};
+use abos_dsp::ddc::DDC;
+use abos_dsp::iq_correct::IQCorrect;
+use abos_dsp::ofdm::{OFDMDemodulator, OFDMModulator};
 use abos_dsp::pulse_shape::RRCFilter;
+use abos_dsp::timing::GardnerTiming;
 
-use abos_phy::dsss::{DSSSModulator, DSSSDemodulator};
+use abos_phy::burst::{build_burst, generate_preamble, generate_sync_word, parse_burst};
+use abos_phy::dsss::{DSSSDemodulator, DSSSModulator};
 use abos_phy::fhss::FHSSEngine;
 use abos_phy::scrambler::Scrambler;
-use abos_phy::burst::{build_burst, parse_burst, generate_preamble, generate_sync_word};
 
-use abos_fec::ldpc::LDPCCode;
-use abos_fec::interleaver::Interleaver;
-use abos_fec::soft_decision::qpsk_llr;
 use abos_fec::crc::crc32;
+use abos_fec::interleaver::Interleaver;
+use abos_fec::ldpc::LDPCCode;
+use abos_fec::soft_decision::qpsk_llr;
 
-use abos_protocol::shard::split_file;
-use abos_protocol::bundle::{create_bundle, deserialize_bundle};
 use abos_protocol::bounce::BufferBounceEngine;
+use abos_protocol::bundle::{create_bundle, deserialize_bundle};
+use abos_protocol::mesh::{Beacon, MeshNode};
+use abos_protocol::routing::DedupCache;
 use abos_protocol::schedule::PhoenixScheduler;
-use abos_protocol::routing::{should_forward, DedupCache};
+use abos_protocol::shard::split_file;
 
-use abos_cognitive::scanner::SpectrumScanner;
-use abos_cognitive::jammer_detect::detect_jammer;
-use abos_cognitive::whitespace::find_white_space;
 use abos_cognitive::adapt::AdaptiveController;
+use abos_cognitive::jammer_detect::detect_jammer;
+use abos_cognitive::scanner::SpectrumScanner;
+use abos_cognitive::whitespace::find_white_space;
 
 use abos_iono::fo_f2::estimate_fo_f2;
-use abos_iono::nvis::select_nvis_frequency;
-use abos_iono::sounder::ChirpSounder;
 use abos_iono::meteor::detect_meteor_burst;
+use abos_iono::nvis::select_nvis_frequency;
 use abos_iono::propagation::predict_muf;
+use abos_iono::sounder::ChirpSounder;
 
-use abos_stealth::mask_cyclo::add_variable_symbol_rate;
-use abos_stealth::phase_noise::PhaseNoiseInjector;
 use abos_stealth::amp_dither::AmpDither;
 use abos_stealth::burst_rand::RandomBurstScheduler;
+use abos_stealth::mask_cyclo::add_variable_symbol_rate;
+use abos_stealth::phase_noise::PhaseNoiseInjector;
 
 use abos_storage::bundle_store::BundleStore;
 use abos_storage::config::SystemConfig;
 
+use abos_common::crypto::{generate_seed, node_id_from_public_key};
 use abos_common::error::{Error, Result};
 use abos_common::types::*;
-use abos_common::crypto::{generate_seed, node_id_from_public_key};
 
 use num_complex::Complex64;
 
@@ -69,68 +70,39 @@ use num_complex::Complex64;
 /// Wires together all layers: SDR hardware → DSP chain → PHY → FEC →
 /// Protocol → Storage → Cognitive → Stealth → Ionospheric sounding.
 pub struct ABOSSystem {
-    /// System configuration
     config: SystemConfig,
-    /// SDR device (HAL)
     sdr: Box<dyn SDRDevice>,
     #[allow(dead_code)]
-    /// DMA buffer for zero-copy sample streaming
     dma_buffer: DMABuffer,
-    /// GPIO controller
     gpio: GPIO,
     #[allow(dead_code)]
-    /// GPS-disciplined timer
     timer: GPSDOTimer,
-    /// Digital Down Converter
     ddc: DDC,
-    /// AGC
     agc: AGC,
-    /// I/Q imbalance corrector
     iq_correct: IQCorrect,
-    /// Costas loop for carrier sync
     costas: CostasLoop,
-    /// Gardner timing recovery
     timing: GardnerTiming,
-    /// OFDM modulator
     ofdm_mod: OFDMModulator,
-    /// OFDM demodulator
     ofdm_demod: OFDMDemodulator,
-    /// RRC filter
     rrc: RRCFilter,
-    /// DSSS modulator
     dsss_mod: Option<DSSSModulator>,
-    /// DSSS demodulator
     dsss_demod: Option<DSSSDemodulator>,
-    /// FHSS engine
     fhss: Option<FHSSEngine>,
-    /// LDPC codec
     ldpc: LDPCCode,
-    /// BICM interleaver
     interleaver: Interleaver,
-    /// Spectrum scanner (cognitive)
     scanner: SpectrumScanner,
-    /// Adaptive rate controller
     adaptive: AdaptiveController,
-    /// Buffer-Bounce engine
     bounce: BufferBounceEngine,
     #[allow(dead_code)]
-    /// Phoenix scheduler
     scheduler: PhoenixScheduler,
-    /// Dedup cache for routing
     dedup: DedupCache,
-    /// Bundle store (persistent)
+    mesh: MeshNode,
     bundle_store: Option<BundleStore>,
-    /// Phase noise injector (stealth)
     phase_noise: PhaseNoiseInjector,
-    /// Amplitude dither (stealth)
     amp_dither: AmpDither,
-    /// Random burst scheduler (stealth)
     burst_scheduler: RandomBurstScheduler,
-    /// System running state
     running: bool,
-    /// Node identity
     node_id: [u8; 32],
-    /// Shared secret for PN sequences
     shared_seed: [u8; 32],
 }
 
@@ -171,6 +143,7 @@ impl ABOSSystem {
         let bounce = BufferBounceEngine::new(5);
         let scheduler = PhoenixScheduler::new(10.0);
         let dedup = DedupCache::new(1000);
+        let mesh = MeshNode::new(node_id);
         let phase_noise = PhaseNoiseInjector::new(0.01);
         let amp_dither = AmpDither::new(0.05);
         let burst_scheduler = RandomBurstScheduler::new(100, 5000);
@@ -180,6 +153,8 @@ impl ABOSSystem {
 
         let gpio = GPIO::new();
         let timer = GPSDOTimer::new(10_000_000.0);
+
+        let store_path = config.data_dir.join("bundles.sled");
 
         let mut system = Self {
             config,
@@ -205,6 +180,7 @@ impl ABOSSystem {
             bounce,
             scheduler,
             dedup,
+            mesh,
             bundle_store: None,
             phase_noise,
             amp_dither,
@@ -215,6 +191,12 @@ impl ABOSSystem {
         };
 
         system.configure_sdr(sdr_config)?;
+        // Open the persistent bundle store from the configured data dir so
+        // store-and-forward works out of the box (T4: was never initialized).
+        if let Some(p) = store_path.to_str() {
+            // Best effort: an unwritable data dir must not prevent boot.
+            let _ = system.init_bundle_store(p);
+        }
         Ok(system)
     }
 
@@ -254,32 +236,28 @@ impl ABOSSystem {
             return Err(Error::ConfigError("System not started".into()));
         }
 
-        // 1. Split into shards with redundancy
         let shards = split_file(data, 1024, 1.5);
 
         for shard in &shards {
-            // 2. Create DTN bundle
             let bundle = create_bundle(
                 &bincode::serialize(shard).map_err(|e| Error::ProtocolError(e.to_string()))?,
                 self.node_id,
                 3600,
             );
 
-            // 3. Scramble bits
             let mut scrambler = Scrambler::default();
             let scrambled = scrambler.scramble(&bundle.payload);
 
-            // 4. BICM interleave
-            let bits: Vec<u8> = scrambled.iter()
+            let bits: Vec<u8> = scrambled
+                .iter()
                 .flat_map(|&b| (0..8).map(move |i| (b >> i) & 0x01))
                 .collect();
             let interleaved = self.interleaver.interleave(&bits);
-
-            // 5. FEC encode (LDPC)
             let encoded = self.ldpc.encode(&interleaved);
 
-            // 6. Modulate to symbols (QPSK default)
-            let symbols: Vec<Complex64> = encoded.chunks(2)
+            // Modulate encoded bits to QPSK symbols
+            let symbols: Vec<Complex64> = encoded
+                .chunks(2)
                 .map(|chunk| {
                     let b = (chunk[0] << 1) | chunk[1];
                     match b {
@@ -291,25 +269,20 @@ impl ABOSSystem {
                 })
                 .collect();
 
-            // 7. OFDM modulate
             let ofdm_symbols = self.ofdm_mod.modulate(&symbols);
-
-            // 8. RRC pulse shape
             let shaped = self.rrc.process(&ofdm_symbols);
 
-            // 9. DSSS spread (if configured)
             let spread = if let Some(ref mut dsss) = self.dsss_mod {
                 dsss.spread(&shaped)
             } else {
                 shaped
             };
 
-            // 10. Stealth masking
+            // Anti-EW stealth: cyclostationary masking, phase noise, and scintillation dither
             let masked = add_variable_symbol_rate(&spread, 0.01);
             let masked = self.phase_noise.inject_noise(&masked);
             let masked = self.amp_dither.apply_dither(&masked);
 
-            // 11. Build burst packet
             let preamble = generate_preamble(32);
             let sync_word = generate_sync_word(&self.shared_seed);
             let packet = BurstPacket {
@@ -319,21 +292,24 @@ impl ABOSSystem {
                     mcs: MCS::Qpsk12,
                     shard_id: bundle.bundle_id,
                     length_bytes: masked.len() as u32,
-                    crc: crc32(&masked.iter().flat_map(|c| {
-                        let b = vec![c.re.to_bits(), c.im.to_bits()];
-                        b.into_iter().flat_map(|v| v.to_le_bytes().to_vec())
-                    }).collect::<Vec<u8>>()),
+                    crc: crc32(
+                        &masked
+                            .iter()
+                            .flat_map(|c| {
+                                let b = vec![c.re.to_bits(), c.im.to_bits()];
+                                b.into_iter().flat_map(|v| v.to_le_bytes().to_vec())
+                            })
+                            .collect::<Vec<u8>>(),
+                    ),
                 },
                 payload: masked,
             };
             let burst_samples = build_burst(&packet);
 
-            // 12. Write to SDR for transmission
             self.gpio.set_tr_switch(true); // TX mode
             self.sdr.write_samples(&burst_samples)?;
             self.gpio.set_tr_switch(false); // Back to RX
 
-            // 12b. Submit to buffer-bounce engine
             let s: Shard = bincode::deserialize(&bundle.payload)
                 .map_err(|e| Error::ProtocolError(e.to_string()))?;
             self.bounce.submit_shard(
@@ -343,6 +319,7 @@ impl ABOSSystem {
                     .unwrap_or_default()
                     .as_secs(),
             );
+            self.mesh.track_bundle(&bundle);
         }
 
         Ok(())
@@ -357,46 +334,31 @@ impl ABOSSystem {
             return Err(Error::ConfigError("System not started".into()));
         }
 
-        // 1. Read samples from SDR
         let n = self.sdr.read_samples(buffer)?;
         if n == 0 {
             return Err(Error::Timeout);
         }
 
         let samples = &buffer[..n];
-
-        // 2. DDC (downconvert to baseband)
         let baseband = self.ddc.process(samples);
-
-        // 3. IQ correction
         let corrected = self.iq_correct.process(&baseband);
-
-        // 4. AGC
         let leveled = self.agc.process(&corrected);
-
-        // 5. Costas loop (carrier recovery)
         let synced: Vec<Complex64> = leveled.iter().map(|&s| self.costas.process(s)).collect();
-
-        // 6. Timing recovery (Gardner)
         let timed = self.timing.process(&synced);
 
-        // 7. Try to parse a burst
-        if let Some(packet) = parse_burst(&timed) {
-            // 8. Remove stealth mask (inverse dither) is lossy, skip for now
+        if let Some(packet) = parse_burst(&timed, &self.shared_seed) {
             let payload = packet.payload;
 
-            // 9. DSSS despread (if configured)
             let despread = if let Some(ref mut dsss) = self.dsss_demod {
                 dsss.despread(&payload)
             } else {
                 payload
             };
 
-            // 10. OFDM demodulate
             let (data_syms, _pilots) = self.ofdm_demod.demodulate(&despread);
 
-            // 11. Soft-decision LLRs for QPSK
-            let noise_var = 0.1; // estimated noise variance
+            // Compute soft-decision LLRs for QPSK under AWGN channel model
+            let noise_var = 0.1;
             let mut llrs = Vec::with_capacity(data_syms.len() * 2);
             for sym in &data_syms {
                 let (llr0, llr1) = qpsk_llr(*sym, noise_var);
@@ -404,47 +366,52 @@ impl ABOSSystem {
                 llrs.push(llr1);
             }
 
-            // 12. FEC decode (LDPC)
             let decoded = self.ldpc.decode(&llrs, 50)?;
-
-            // 13. Deinterleave
             let deinterleaved = self.interleaver.deinterleave(&decoded);
 
-            // 14. Pack bits to bytes
-            let bytes: Vec<u8> = deinterleaved.chunks(8)
+            let bytes: Vec<u8> = deinterleaved
+                .chunks(8)
                 .map(|chunk| {
-                    chunk.iter().enumerate().fold(0u8, |acc, (i, &b)| acc | (b << i))
+                    chunk
+                        .iter()
+                        .enumerate()
+                        .fold(0u8, |acc, (i, &b)| acc | (b << i))
                 })
                 .collect();
 
-            // 15. Descramble
             let mut scrambler = Scrambler::default();
             let descrambled = scrambler.descramble(&bytes);
-
-            // 16. Deserialize bundle
             let bundle = deserialize_bundle(&descrambled)?;
 
-            // 17. Dedup check
             if self.dedup.check_and_insert(bundle.bundle_id) {
                 return Err(Error::ProtocolError("Duplicate bundle".into()));
             }
 
-            // 18. Store bundle
-            if let Some(ref store) = self.bundle_store {
-                store.store_bundle(&bundle)?;
-            }
+            let is_new = if let Some(ref store) = self.bundle_store {
+                store.store_bundle(&bundle)?
+            } else {
+                true
+            };
 
-            // 19. Extract shard from bundle payload
             let s: Shard = bincode::deserialize(&bundle.payload)
                 .map_err(|e| Error::ProtocolError(e.to_string()))?;
 
-            // 20. Track in buffer-bounce engine
-            self.bounce.record_complementary_shard(s);
+            self.bounce.record_complementary_shard(s.clone());
+            self.mesh
+                .record_availability_from_shard(&s, bundle.source_node);
 
-            // 21. Check if we should forward
-            if should_forward(bundle.hop_count, bundle.ttl) {
-                // Re-transmit the bundle (forwarding)
-                // (Would schedule for retransmission in a real system)
+            // Re-broadcast and track ACKs if flooding policy permits
+            if is_new && self.mesh.should_forward_bundle(&bundle) {
+                let mut fwd = bundle.clone();
+                abos_protocol::routing::increment_hop(&mut fwd);
+                let fshard: Shard = bincode::deserialize(&fwd.payload)
+                    .map_err(|e| Error::ProtocolError(e.to_string()))?;
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                self.bounce.submit_shard(fshard, now);
+                self.mesh.track_bundle(&fwd);
             }
 
             return Ok(bundle.payload);
@@ -502,7 +469,11 @@ impl ABOSSystem {
     /// Initialize FHSS.
     pub fn init_fhss(&mut self, hop_duration: f64, min_freq: f64, max_freq: f64, num_hops: usize) {
         self.fhss = Some(FHSSEngine::new(
-            &self.shared_seed, hop_duration, min_freq, max_freq, num_hops,
+            &self.shared_seed,
+            hop_duration,
+            min_freq,
+            max_freq,
+            num_hops,
         ));
     }
 
@@ -542,6 +513,69 @@ impl ABOSSystem {
     /// Get next scheduled burst time (stealth).
     pub fn next_burst_time(&mut self) -> u64 {
         self.burst_scheduler.next_burst_time()
+    }
+
+    // --- Mesh / Ghost-node coordination ---------------------------------
+
+    /// Immutable view of the mesh state (peer list, pending ACKs, …).
+    pub fn mesh(&self) -> &MeshNode {
+        &self.mesh
+    }
+
+    /// Mutable mesh handle (drives beacons, ACKs, backoff sweeps).
+    pub fn mesh_mut(&mut self) -> &mut MeshNode {
+        &mut self.mesh
+    }
+
+    /// Emit a local discovery beacon if the interval has elapsed.
+    /// Returns the beacon to flood, or `None` if it is not due yet.
+    pub fn maybe_emit_beacon(&mut self, alias: &str) -> Option<Beacon> {
+        if self.mesh.beacon_due() {
+            Some(self.mesh.emit_beacon(alias))
+        } else {
+            None
+        }
+    }
+
+    /// Handle an inbound beacon; returns it if it should be re-flooded.
+    pub fn on_beacon(&mut self, beacon: &Beacon) -> Option<Beacon> {
+        if self.mesh.on_beacon(beacon) {
+            Some(beacon.clone())
+        } else {
+            None
+        }
+    }
+
+    /// Handle an inbound ACK for a bundle we originated.
+    pub fn on_ack(&mut self, bundle_id: [u8; 32], peer: NodeId) -> bool {
+        self.mesh.record_ack(bundle_id, peer)
+    }
+
+    /// Bundles due for retransmission under exponential backoff.
+    pub fn retransmit_queue(&mut self) -> Vec<[u8; 32]> {
+        self.mesh.due_for_retransmit()
+    }
+
+    /// Expire stale peers; returns how many were dropped.
+    pub fn expire_mesh_peers(&mut self) -> usize {
+        self.mesh.expire_peers()
+    }
+
+    /// Evict expired bundles from the persistent store.
+    pub fn evict_expired_bundles(&mut self) -> usize {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        match &self.bundle_store {
+            Some(store) => store.evict_expired(now).unwrap_or(0),
+            None => 0,
+        }
+    }
+
+    /// Number of bundles in the persistent store.
+    pub fn stored_bundle_count(&self) -> usize {
+        self.bundle_store.as_ref().map(|s| s.len()).unwrap_or(0)
     }
 }
 

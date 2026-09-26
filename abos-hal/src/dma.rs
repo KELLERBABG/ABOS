@@ -91,9 +91,9 @@ impl RingBuffer {
     pub fn write(&mut self, samples: &[Complex64]) -> usize {
         let n = samples.len().min(self.remaining());
         let mask = self.capacity - 1;
-        for i in 0..n {
+        for (i, &sample) in samples[..n].iter().enumerate() {
             let idx = (self.write_cursor + i) & mask;
-            self.data[idx] = samples[i];
+            self.data[idx] = sample;
         }
         self.write_cursor += n;
         n
@@ -103,9 +103,9 @@ impl RingBuffer {
     pub fn read(&mut self, buffer: &mut [Complex64]) -> usize {
         let n = buffer.len().min(self.available());
         let mask = self.capacity - 1;
-        for i in 0..n {
+        for (i, slot) in buffer[..n].iter_mut().enumerate() {
             let idx = (self.read_cursor + i) & mask;
-            buffer[i] = self.data[idx];
+            *slot = self.data[idx];
         }
         self.read_cursor += n;
         n

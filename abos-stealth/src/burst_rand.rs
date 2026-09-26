@@ -8,7 +8,11 @@ pub struct RandomBurstScheduler {
 
 impl RandomBurstScheduler {
     pub fn new(min_interval: u64, max_interval: u64) -> Self {
-        Self { min_interval, max_interval, rng: rand::thread_rng() }
+        Self {
+            min_interval,
+            max_interval,
+            rng: rand::thread_rng(),
+        }
     }
 
     pub fn next_burst_time(&mut self) -> u64 {

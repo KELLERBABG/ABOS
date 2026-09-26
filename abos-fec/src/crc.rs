@@ -4,7 +4,7 @@ const CRC32_POLY: u32 = 0xEDB88320;
 /// Pre-computed CRC-32 lookup table
 fn crc32_table() -> [u32; 256] {
     let mut table = [0u32; 256];
-    for i in 0..256 {
+    for (i, slot) in table.iter_mut().enumerate() {
         let mut crc = i as u32;
         for _ in 0..8 {
             if crc & 1 == 1 {
@@ -13,7 +13,7 @@ fn crc32_table() -> [u32; 256] {
                 crc >>= 1;
             }
         }
-        table[i] = crc;
+        *slot = crc;
     }
     table
 }

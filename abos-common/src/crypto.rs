@@ -3,9 +3,9 @@ use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, Nonce,
 };
+use hmac::{Hmac, Mac};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
-use hmac::{Hmac, Mac};
 
 /// Encrypt plaintext with AES-256-GCM
 /// Returns (nonce, ciphertext) where nonce is 12 bytes
@@ -40,8 +40,7 @@ pub fn decrypt_aes256(key: &[u8; 32], nonce: &[u8], ciphertext: &[u8]) -> Result
 
 /// Derive a 32-byte key from a shared secret and salt using HMAC-SHA256
 pub fn derive_key(shared_secret: &[u8; 32], salt: &[u8]) -> [u8; 32] {
-    let mut mac: HmacSha256 = Mac::new_from_slice(shared_secret)
-        .expect("HMAC key length is valid");
+    let mut mac: HmacSha256 = Mac::new_from_slice(shared_secret).expect("HMAC key length is valid");
     mac.update(salt);
     let result = mac.finalize();
     let code = result.into_bytes();
@@ -72,8 +71,7 @@ type HmacSha256 = Hmac<Sha256>;
 
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     use hmac::Mac;
-    let mut mac: HmacSha256 = Mac::new_from_slice(key)
-        .expect("HMAC key length is valid");
+    let mut mac: HmacSha256 = Mac::new_from_slice(key).expect("HMAC key length is valid");
     mac.update(data);
     let result = mac.finalize();
     let code = result.into_bytes();

@@ -23,7 +23,11 @@ impl PNGenerator {
     pub fn next_chip(&mut self) -> f64 {
         let bit: u8 = self.rng.gen();
         self.state = self.state.wrapping_add(1);
-        if bit & 0x01 == 0 { -1.0 } else { 1.0 }
+        if bit & 0x01 == 0 {
+            -1.0
+        } else {
+            1.0
+        }
     }
 
     /// Generate a block of chips
@@ -69,6 +73,10 @@ impl GoldCodeGenerator {
         let chip = ((self.state1 & 1) ^ (self.state2 & 1)) as i8;
         self.state1 = (self.state1 >> 1) | (feedback1 << 15);
         self.state2 = (self.state2 >> 1) | (feedback2 << 15);
-        if chip == 0 { -1.0 } else { 1.0 }
+        if chip == 0 {
+            -1.0
+        } else {
+            1.0
+        }
     }
 }

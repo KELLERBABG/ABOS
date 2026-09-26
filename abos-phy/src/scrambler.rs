@@ -16,10 +16,10 @@ impl Scrambler {
 
     /// Generate next scrambler bit and advance state
     fn next_bit(&mut self) -> u8 {
-        let feedback = (self.lfsr_state & 0x0001) ^
-                       ((self.lfsr_state >> 2) & 0x0001) ^
-                       ((self.lfsr_state >> 3) & 0x0001) ^
-                       ((self.lfsr_state >> 5) & 0x0001);
+        let feedback = (self.lfsr_state & 0x0001)
+            ^ ((self.lfsr_state >> 2) & 0x0001)
+            ^ ((self.lfsr_state >> 3) & 0x0001)
+            ^ ((self.lfsr_state >> 5) & 0x0001);
         let output = (self.lfsr_state & 0x0001) as u8;
         self.lfsr_state = (self.lfsr_state >> 1) | (feedback << 15);
         output
@@ -27,15 +27,17 @@ impl Scrambler {
 
     /// Scramble data by XORing with LFSR output
     pub fn scramble(&mut self, data: &[u8]) -> Vec<u8> {
-        data.iter().map(|&byte| {
-            let mut scrambled = 0u8;
-            for bit in 0..8 {
-                let data_bit = (byte >> bit) & 0x01;
-                let scrambler_bit = self.next_bit();
-                scrambled |= (data_bit ^ scrambler_bit) << bit;
-            }
-            scrambled
-        }).collect()
+        data.iter()
+            .map(|&byte| {
+                let mut scrambled = 0u8;
+                for bit in 0..8 {
+                    let data_bit = (byte >> bit) & 0x01;
+                    let scrambler_bit = self.next_bit();
+                    scrambled |= (data_bit ^ scrambler_bit) << bit;
+                }
+                scrambled
+            })
+            .collect()
     }
 
     /// Descramble data (identical to scramble for LFSR-based scramblers)

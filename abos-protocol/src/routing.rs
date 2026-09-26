@@ -1,10 +1,10 @@
-use abos_common::types::Bundle;
+//! Implicit routing / flooding logic — no routing tables required.
+//!
+//! Every node that receives a bundle decides independently whether to
+//! forward it further, based on hop count and TTL. This creates a
+//! decentralized, unstructured flooding mesh network.
 
-/// Implicit routing / flooding logic - no routing tables required
-///
-/// Every node that receives a bundle decides independently whether to
-/// forward it further, based on hop count and TTL. This creates a
-/// decentralized, unstructured flooding mesh network.
+use abos_common::types::Bundle;
 
 /// Determine if a bundle should be forwarded based on hop count and TTL
 pub fn should_forward(hop_count: u32, ttl: u32) -> bool {

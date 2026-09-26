@@ -18,7 +18,7 @@ pub fn ifft(samples: &[Complex64]) -> Vec<Complex64> {
     fft_inverse.process(&mut buffer);
     let inv_n = 1.0 / n as f64;
     for v in buffer.iter_mut() {
-        *v = *v * inv_n;
+        *v *= inv_n;
     }
     buffer
 }

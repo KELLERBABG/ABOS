@@ -41,6 +41,7 @@ dependencies = [
 name = "abos-cli"
 version = "0.1.0"
 dependencies = [
+ "abos",
  "abos-cognitive",
  "abos-common",
  "abos-dsp",
@@ -52,6 +53,7 @@ dependencies = [
  "abos-stealth",
  "abos-storage",
  "clap",
+ "num-complex",
  "tokio",
 ]
 
@@ -204,7 +206,9 @@ dependencies = [
  "abos-protocol",
  "abos-stealth",
  "abos-storage",
+ "bincode",
  "num-complex",
+ "rand",
  "tokio",
 ]
 

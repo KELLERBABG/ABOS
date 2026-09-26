@@ -36,8 +36,10 @@ impl SystemConfig {
     pub fn load() -> Result<Self> {
         let config_path = PathBuf::from("abos_config.json");
         if config_path.exists() {
-            let data = std::fs::read_to_string(&config_path).map_err(|e| abos_common::error::Error::IoError(e))?;
-            let config: SystemConfig = serde_json::from_str(&data).map_err(|e| abos_common::error::Error::ConfigError(e.to_string()))?;
+            let data = std::fs::read_to_string(&config_path)
+                .map_err(abos_common::error::Error::IoError)?;
+            let config: SystemConfig = serde_json::from_str(&data)
+                .map_err(|e| abos_common::error::Error::ConfigError(e.to_string()))?;
             Ok(config)
         } else {
             let config = SystemConfig::default();
@@ -48,8 +50,9 @@ impl SystemConfig {
 
     pub fn save(&self) -> Result<()> {
         let config_path = PathBuf::from("abos_config.json");
-        let data = serde_json::to_string_pretty(self).map_err(|e| abos_common::error::Error::ConfigError(e.to_string()))?;
-        std::fs::write(&config_path, data).map_err(|e| abos_common::error::Error::IoError(e))?;
+        let data = serde_json::to_string_pretty(self)
+            .map_err(|e| abos_common::error::Error::ConfigError(e.to_string()))?;
+        std::fs::write(&config_path, data).map_err(abos_common::error::Error::IoError)?;
         Ok(())
     }
 }

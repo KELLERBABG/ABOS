@@ -8,7 +8,11 @@ pub struct ChirpSounder {
 
 impl ChirpSounder {
     pub fn new(start_freq: f64, stop_freq: f64, duration: f64) -> Self {
-        Self { start_freq, stop_freq, duration }
+        Self {
+            start_freq,
+            stop_freq,
+            duration,
+        }
     }
 
     pub fn generate_chirp(&self) -> Vec<Complex64> {

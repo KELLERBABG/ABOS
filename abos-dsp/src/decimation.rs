@@ -11,7 +11,11 @@ impl FIRFilter {
         let state_len = taps.len().saturating_sub(1);
         let state_re = vec![0.0_f64; state_len];
         let state_im = vec![0.0_f64; state_len];
-        Self { taps, state_re, state_im }
+        Self {
+            taps,
+            state_re,
+            state_im,
+        }
     }
 
     pub fn process(&mut self, samples: &[Complex64]) -> Vec<Complex64> {

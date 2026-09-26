@@ -26,19 +26,10 @@ pub fn split_file(data: &[u8], shard_size: usize, redundancy: f64) -> Vec<Shard>
             shard_data.resize(shard_size, 0);
         }
 
-        // Add redundancy: XOR with additional random shards for fountain-like behavior
-        if i >= total_shards {
-            let source_idx = (i - total_shards) as usize % total_shards as usize;
-            let source_start = source_idx * shard_size;
-            if source_start < data.len() {
-                let source_end = (source_start + shard_size).min(data.len());
-                for (j, &byte) in data[source_start..source_end].iter().enumerate() {
-                    if j < shard_data.len() {
-                        shard_data[j] ^= byte;
-                    }
-                }
-            }
-        }
+        // Redundancy: shard i >= total_shards is a repetition copy of source
+        // shard (i % total_shards) — the receiver can use it to fill any gap
+        // left by a lost original. (`start` above already points at that
+        // source shard's range because it uses `i % total_shards`.)
 
         let checksum = crc32fast::hash(&shard_data);
 
@@ -63,19 +54,28 @@ pub fn reconstruct_file(shards: &[Shard]) -> Result<Vec<u8>> {
         return Err(Error::ProtocolError("No shards provided".into()));
     }
 
-    // Get file_id from first shard
     let file_id = shards[0].file_id;
     let total = shards[0].total_shards;
-
-    // Collect unique shards by index
+    // Pass 1: place original shards (index < total) into their own slots
     let mut collected: Vec<Option<&Shard>> = vec![None; total as usize];
     for shard in shards {
         if shard.file_id != file_id {
             return Err(Error::ProtocolError("Shard file_id mismatch".into()));
         }
-        if (shard.shard_index as usize) < collected.len() {
-            if collected[shard.shard_index as usize].is_none() {
-                collected[shard.shard_index as usize] = Some(shard);
+        let idx = shard.shard_index as usize;
+        if idx < total as usize && collected[idx].is_none() {
+            collected[idx] = Some(shard);
+        }
+    }
+
+    // Pass 2: fill remaining gaps from repetition copies (index >= total,
+    // which repeat source shard index % total).
+    for shard in shards {
+        let idx = shard.shard_index as usize;
+        if idx >= total as usize {
+            let slot = idx % total as usize;
+            if collected[slot].is_none() {
+                collected[slot] = Some(shard);
             }
         }
     }
@@ -84,11 +84,13 @@ pub fn reconstruct_file(shards: &[Shard]) -> Result<Vec<u8>> {
     let available = collected.iter().filter(|s| s.is_some()).count();
     if available < (total as usize * 3 / 4).max(1) {
         return Err(Error::ProtocolError(format!(
-            "Insufficient shards: {}/{}", available, total
+            "Insufficient shards: {}/{}",
+            available, total
         )));
     }
 
-    // Reconstruct
+    // Reconstruct (verify checksums first so a corrupt shard is rejected
+    // rather than silently copied into the output).
     let shard_size = shards[0].data.len();
     let mut file_data = Vec::with_capacity(total as usize * shard_size);
 
@@ -101,8 +103,9 @@ pub fn reconstruct_file(shards: &[Shard]) -> Result<Vec<u8>> {
             }
             file_data.extend_from_slice(&shard.data);
         } else {
-            // Missing shard - fill with zeros (RaptorQ would reconstruct)
-            file_data.extend(std::iter::repeat(0u8).take(shard_size));
+            // Missing shard - fill with zeros; the file-level HMAC check
+            // below rejects the result, so corruption is never silent.
+            file_data.extend(std::iter::repeat_n(0u8, shard_size));
         }
     }
 
@@ -114,7 +117,9 @@ pub fn reconstruct_file(shards: &[Shard]) -> Result<Vec<u8>> {
     // Verify file integrity
     let expected_id = crypto::hmac_sha256(b"file_id", &file_data);
     if expected_id != file_id {
-        return Err(Error::ProtocolError("File hash mismatch - data corruption".into()));
+        return Err(Error::ProtocolError(
+            "File hash mismatch - data corruption".into(),
+        ));
     }
 
     Ok(file_data)
@@ -126,7 +131,7 @@ mod crc32fast {
 
     fn table() -> [u32; 256] {
         let mut t = [0u32; 256];
-        for i in 0..256 {
+        for (i, slot) in t.iter_mut().enumerate() {
             let mut crc = i as u32;
             for _ in 0..8 {
                 if crc & 1 == 1 {
@@ -135,7 +140,7 @@ mod crc32fast {
                     crc >>= 1;
                 }
             }
-            t[i] = crc;
+            *slot = crc;
         }
         t
     }

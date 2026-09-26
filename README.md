@@ -5,10 +5,10 @@ A software-defined radio (SDR) operating system written in Rust that enables
 propagation physics. ABOS treats the atmosphere itself as a distributed relay,
 memory buffer, and stealth medium.
 
-> **Status:** Build and tests are green. This workspace is provided "as is";
-> several layers are complete and tested, while a few workspace members are
-> scaffolding/placeholder crates (see [Workspace layout](#workspace-layout) and
-> [Status & known gaps](#status--known-gaps) below).
+> **Status:** Build, tests, fmt and clippy (`-D warnings`) are green, and
+> CI enforces all three on every push/PR. Every declared workspace crate now
+> contains real, tested code (T4 — see [AUDIT_REPORT.md](AUDIT_REPORT.md) for
+> the readiness tier ladder).
 
 ---
 
@@ -57,31 +57,37 @@ cargo test --workspace
 ```
 
 Expected result: the workspace compiles with no errors and the tests pass
-(43 unit tests across the core crates, plus each crate's own integration-test
-binary and doc-tests). See [Status & known gaps](#status--known-gaps).
+(**103 unit/integration tests** across the crates, plus doc-tests). See
+[Status & known gaps](#status--known-gaps).
 
-Run the static linter:
+Run the static linter (must be warning-free, as enforced by CI):
 
 ```console
-cargo clippy --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Clippy reports only style warnings (no errors).
+Run the formatter check:
+
+```console
+cargo fmt --all -- --check
+```
 
 ---
 
 ## Quick start (CLI binary)
 
-The command-line interface is the root `abos` binary (8 subcommands). After a
-release build:
+The command-line interface is the `abos` binary provided by the `abos-cli`
+crate (10 subcommands, clap-derived). After a release build:
 
 ```console
-target\release\abos.exe status      # Show loaded configuration
-target\release\abos.exe configure   # Print current config values
-target\release\abos.exe scan        # Scan the spectrum (requires SDR/stub)
-target\release\abos.exe chirp       # Generate a chirp-sounder waveform
-target\release\abos.exe transmit <file>
-target\release\abos.exe receive
+cargo run -p abos-cli -- status      # Show loaded configuration
+cargo run -p abos-cli -- configure   # Print current config values
+cargo run -p abos-cli -- scan        # Scan the spectrum (requires SDR/stub)
+cargo run -p abos-cli -- chirp 3 10 0.1  # Chirp-sounder waveform (validated args)
+cargo run -p abos-cli -- transmit <file>
+cargo run -p abos-cli -- receive
+cargo run -p abos-cli -- mesh        # Mesh coordination state (peers/ACKs)
+cargo run -p abos-cli -- forward     # Retransmit queue + bundle store stats
 ```
 
 Configuration lives in `abos_config.json` (created automatically with defaults
@@ -95,46 +101,51 @@ without hardware.
 
 | Crate | Role | State |
 |---|---|---|
-| `abos` (root) | System orchestrator `ABOSSystem` + CLI binary | Implemented, tested (5) |
-| `abos-hal` | SDR abstraction, DMA, GPIO, GPSDO timer | Implemented |
+| `abos` (root) | System orchestrator `ABOSSystem` + library | Implemented, tested (5) |
+| `abos-hal` | SDR abstraction, DMA, GPIO, GPSDO timer | Implemented (stub drivers; real HW = T5) |
 | `abos-dsp` | DDC, AGC, I/Q correction, Costas, Gardner, OFDM, FFT, RRC | Implemented, tested |
-| `abos-phy` | DSSS, FHSS, scrambler, burst builder/parser | Implemented |
-| `abos-fec` | LDPC, BICM interleaver, soft-decision LLR, CRC32 | Implemented, tested |
-| `abos-protocol` | Shard split, DTN bundle, buffer-bounce, scheduler, routing | Implemented |
+| `abos-phy` | DSSS, FHSS, scrambler, burst builder/parser | Implemented, tested (DSSS roundtrip) |
+| `abos-fec` | LDPC (systematic H=[A\|I]), BICM interleaver, soft LLR, CRC32 | Implemented, tested (syndrome-verified) |
+| `abos-protocol` | Shard split, DTN bundle, buffer-bounce, scheduler, routing, **mesh** | Implemented, tested (10 mesh tests) |
 | `abos-cognitive` | Spectrum scanner, jammer detect, white-space, adaptive MCS | Implemented |
 | `abos-iono` | Chirp sounder, f0F2, NVIS selection, meteor, MUF | Implemented |
 | `abos-stealth` | Cyclostationary masking, phase noise, amp dither, burst rand | Implemented |
-| `abos-storage` | Persistent DTN bundle store, system config | Implemented |
-| `abos-common` | Complex math, PN/Gold codes, AES/HMAC crypto, node ID | Implemented, tested |
-| `abos-cli` | Placeholder crate (empty lib) | Scaffolding only |
-| `abos-gui` | Optional GUI (egui) | Stub (0%) |
-| `abos-tests` | Integration/loopback harness | Placeholder crate (empty lib) |
+| `abos-storage` | Persistent DTN bundle store (TTL/eviction, dedup), config | Implemented, tested (4) |
+| `abos-common` | Complex math, PN/Gold codes, AES/HMAC crypto, node ID | Implemented, tested (14) |
+| `abos-cli` | clap CLI (`abos` binary, 10 subcommands) | Implemented |
+| `abos-gui` | Dashboard: headless `GuiState` + egui view | Implemented, tested (11) |
+| `abos-tests` | Loopback channel, e2e/mesh/fault-injection harness | Implemented, tested (27) |
 
-The CLI lives in the root `abos` binary (`src/main.rs`), **not** in the
-`abos-cli` crate (which is an empty placeholder).
+The `abos` binary is produced by the **`abos-cli` crate** (`[[bin]] name =
+"abos"`), not the root package.
 
 ---
 
 ## Status & known gaps
 
 - **Green:** full workspace compiles (`cargo build`, `cargo build --release`),
-  and `cargo test --workspace` passes — 43 unit tests across the root,
-  `abos-common`, `abos-dsp` and `abos-fec` crates, plus integration-test
-  binaries and doc-tests.
-- **Honest gaps:** `abos-gui` is an empty stub, and `abos-cli` / `abos-tests`
-  are empty placeholder crates. Mesh/Ghost-node coordination and the GUI
-  dashboard are not implemented. These are declared scaffolding and are **not**
-  yet exercised by tests.
-- `cargo test` emits a few warnings (unused variables/import) in two
-  integration-test files; `cargo clippy` additionally reports style warnings.
-  Neither affects correctness.
-- Live over-the-air behaviour and real SDR interaction were **not** verified in
-  a CI environment (no radio hardware available).
+  `cargo test --workspace` passes (**103 tests** across all crates, including
+  the e2e loopback, 3-node mesh and fault-injection suites),
+  `cargo fmt --all -- --check` is clean, and
+  `cargo clippy --workspace --all-targets -- -D warnings` has zero warnings.
+  CI (`.github/workflows/ci.yml`) enforces all four on every push/PR.
+- **Implemented (T4):** mesh/Ghost-node coordination (beacons, ACK
+  aggregation with exponential backoff, shard-availability tracking, live
+  forwarding path), clap CLI with 10 validated subcommands, headless GUI
+  state + egui view, bundle store with TTL/eviction and dedup, and the
+  `abos-tests` harness (loopback channel, byte-identical e2e roundtrip,
+  fault injection).
+- **Honest gaps (T5):** SDR hardware drivers are simulation stubs (zero-fill
+  reads); live over-the-air behaviour was **not** verified (no radio
+  hardware available). No structured logging/metrics yet, and no fuzzing.
+- The repository declares **no license file** (all rights reserved by
+  default).
 
 ---
 
 ## Documentation
 
+- `AUDIT_REPORT.md` — readiness tier ladder (T1–T5) and audit scorecard.
 - `WHITEPAPER.md` — architecture, RF chains, crypto and status/roadmap.
 - `ABOS_Building_Plan.md` — detailed layer-by-layer build plan.
 - `PROGRESS_LOG.md` — build/test history and per-crate completion notes.

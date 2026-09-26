@@ -22,7 +22,11 @@ pub fn qpsk_llr(sample: Complex64, noise_variance: f64) -> (f64, f64) {
 /// Compute LLR for BPSK symbol
 pub fn bpsk_llr(sample: Complex64, noise_variance: f64) -> f64 {
     if noise_variance <= 0.0 {
-        if sample.re >= 0.0 { 10.0 } else { -10.0 }
+        if sample.re >= 0.0 {
+            10.0
+        } else {
+            -10.0
+        }
     } else {
         2.0 * sample.re / noise_variance
     }
