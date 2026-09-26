@@ -369,65 +369,6 @@
     }
     .copy-btn:hover { color: var(--text); border-color: var(--cyan); }
 
-    /* —— HUD Bar / Telemetry Metrics ——————————————————————————————— */
-    .rf-bar {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 1.6rem 1.85rem;
-      margin: 24px 0 44px;
-    }
-    .rf-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 0.85rem;
-      margin-bottom: 1.4rem;
-      font-family: var(--font-mono);
-      font-size: 0.8rem;
-      color: var(--teal);
-    }
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1.25rem;
-    }
-    @media (max-width: 900px) { .metrics-grid { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 520px) { .metrics-grid { grid-template-columns: 1fr; } }
-    .metric-card {
-      background: rgba(11, 21, 40, 0.65);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-      padding: 1.15rem 1.25rem;
-      transition: border-color .15s;
-    }
-    .metric-card:hover { border-color: var(--border-glow); }
-    .metric-title {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      margin-bottom: 0.4rem;
-    }
-    .metric-val {
-      font-family: var(--font-mono);
-      font-size: 1.85rem;
-      font-weight: 700;
-      color: var(--text);
-    }
-    .metric-val .unit { font-size: 0.9rem; color: var(--text-muted); font-weight: 500; }
-    .metric-sub {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      color: var(--emerald);
-      margin-top: 0.35rem;
-      line-height: 1.4;
-    }
-
     /* —— Sections ————————————————————————————————————————————————— */
     section { padding-top: 56px; }
     section:first-of-type { padding-top: 0; }
@@ -919,7 +860,6 @@
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           Repository
         </a>
-        <a href="docs.html" class="btn-action">Docs Portal &rarr;</a>
       </div>
     </div>
   </header>
@@ -928,7 +868,7 @@
 
     <!-- HERO -->
     <header class="hero">
-      <div class="hero-eyebrow">Covert Ionospheric SDR Mesh</div>
+      <div class="hero-eyebrow">Decentralized HF Mesh Architecture</div>
       <h1>Broadcast through the <em>ionosphere.</em></h1>
       <p class="lead">
         A software-defined radio operating system written in pure Rust that exploits ionospheric propagation physics.
@@ -956,8 +896,8 @@
       </div>
 
       <div class="cta-row">
-        <a class="btn btn-primary" href="#cli">Run the Pipeline &darr;</a>
-        <a class="btn btn-ghost" href="docs.html">Documentation Hub &rarr;</a>
+        <a class="btn btn-primary" href="docs.html">Documentation &rarr;</a>
+        <a class="btn btn-ghost" href="#crates">Workspace Crates &darr;</a>
         <a class="btn btn-ghost" href="https://github.com/KELLERBABG/ABOS" target="_blank" rel="noopener">Source Code &nearr;</a>
       </div>
 
@@ -972,35 +912,6 @@
         </div>
       </div>
     </header>
-
-    <!-- RF Specs & Physical Telemetry HUD -->
-    <section class="rf-bar" aria-label="Propagation telemetry">
-      <div class="rf-header">
-        <span>ATMOSPHERIC PROPAGATION INVARIANTS &bull; SDR COGNITIVE TELEMETRY</span>
-      </div>
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-title">NVIS Radiation Angle</div>
-          <div class="metric-val">70&deg;&ndash;90&deg;</div>
-          <div class="metric-sub">NEAR-VERTICAL REFLECTION &bull; ZERO SKIP ZONE</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-title">Operating Band (HF)</div>
-          <div class="metric-val">2&ndash;10 <span class="unit">MHz</span></div>
-          <div class="metric-sub">CRITICAL CEILING f<sub>0</sub>F2 ADAPTIVE SELECTION</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-title">Stealth Gain (DSSS)</div>
-          <div class="metric-val">&ge; 20&ndash;30 <span class="unit">dB</span></div>
-          <div class="metric-sub">BURIED BELOW COSMIC THERMAL NOISE FLOOR</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-title">Forward Error Correction</div>
-          <div class="metric-val">LDPC <span class="unit">(256/512)</span></div>
-          <div class="metric-sub">BELIEF PROPAGATION + 1.5&times; SHARDS</div>
-        </div>
-      </div>
-    </section>
 
     <!-- 13 Workspace Crates Architecture -->
     <section id="crates">
@@ -1485,36 +1396,36 @@ if system.on_new_bundle(&bundle) && system.should_forward(&bundle) {
       </div>
     </section>
 
-    <!-- Documentation Hub Showcase -->
+    <!-- Documentation Showcase -->
     <section id="docs-cta" style="padding-top:0;">
       <div class="docs-cta">
         <div class="docs-cta-header">
           <div class="docs-cta-copy">
-            <span class="section-tag">Engineering Specifications &amp; Manuals</span>
-            <h2>Complete Technical Documentation Hub</h2>
-            <p>Every layer of ABOS is exhaustively specified and verified. Explore the technical whitepaper, system architecture specification, CLI operational guide, and verification test matrix.</p>
+            <span class="section-tag">Specifications &amp; References</span>
+            <h2>Technical Documentation</h2>
+            <p>Read the complete technical specifications, subsystem architecture, command-line operations manual, and verification test matrix.</p>
           </div>
           <div class="cta-row" style="margin-top:0;">
-            <a class="btn btn-primary" href="docs.html">Open Documentation Hub &rarr;</a>
+            <a class="btn btn-primary" href="docs.html">Read Documentation &rarr;</a>
           </div>
         </div>
 
         <div class="docs-hub-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
           <a class="docs-hub-card" href="docs.html#whitepaper">
-            <span class="docs-hub-card-title">📘 Technical Whitepaper</span>
-            <span class="docs-hub-card-desc">NVIS skywave physics, Appleton-Hartree plasma math, DSSS stealth gain, and DTN sharding.</span>
+            <span class="docs-hub-card-title">Technical Whitepaper</span>
+            <span class="docs-hub-card-desc">NVIS skywave physics, Appleton-Hartree plasma equations, DSSS processing gain, and DTN bundle sharding.</span>
           </a>
           <a class="docs-hub-card" href="docs.html#guide">
-            <span class="docs-hub-card-title">📖 System Guide &amp; CLI</span>
-            <span class="docs-hub-card-desc">Workspace catalog, 10 clap subcommands, hardware prerequisites, and operational workflows.</span>
+            <span class="docs-hub-card-title">System Guide &amp; CLI</span>
+            <span class="docs-hub-card-desc">Workspace catalog, 10 clap subcommands, hardware prerequisites, and runtime configuration workflows.</span>
           </a>
           <a class="docs-hub-card" href="docs.html#architecture">
-            <span class="docs-hub-card-title">📐 Architecture &amp; Protocol</span>
+            <span class="docs-hub-card-title">Architecture &amp; Protocol</span>
             <span class="docs-hub-card-desc">13-crate subsystem architecture blueprint, systematic LDPC matrix formulas, and state machines.</span>
           </a>
           <a class="docs-hub-card" href="docs.html#verification">
-            <span class="docs-hub-card-title">🛡️ Verification &amp; Test Matrix</span>
-            <span class="docs-hub-card-desc">103 verified workspace test suites, loopback channel verification, and fault-injection benchmarks.</span>
+            <span class="docs-hub-card-title">Verification &amp; Test Matrix</span>
+            <span class="docs-hub-card-desc">103 passing workspace test suites, loopback channel verification, and fault-injection benchmarks.</span>
           </a>
         </div>
       </div>

@@ -105,17 +105,6 @@
       height: 32px;
       border-radius: 6px;
     }
-    .doc-badge {
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-      padding: 2px 8px;
-      background: var(--cyan-subtle);
-      border: 1px solid var(--cyan-border);
-      color: var(--cyan);
-      border-radius: 4px;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-    }
 
     .header-actions {
       display: flex;
@@ -254,21 +243,6 @@
       color: var(--cyan);
       font-weight: 600;
     }
-    .doc-nav-pill {
-      font-family: var(--font-mono);
-      font-size: 0.65rem;
-      padding: 1px 6px;
-      border-radius: 4px;
-      background: var(--surface-raised);
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-    }
-    .doc-nav-item.active .doc-nav-pill {
-      background: var(--cyan-subtle);
-      border-color: var(--cyan-border);
-      color: var(--cyan);
-    }
-
     /* Sub-TOC */
     .doc-toc {
       border-top: 1px solid var(--border-subtle);
@@ -304,25 +278,6 @@
       border-left: 2px solid var(--teal);
     }
 
-    /* Telemetry HUD in Sidebar */
-    .sidebar-hud {
-      margin-top: auto;
-      background: var(--surface-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
-      font-family: var(--font-mono);
-      font-size: 0.72rem;
-    }
-    .hud-row {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 6px;
-      color: var(--text-muted);
-    }
-    .hud-row:last-child { margin-bottom: 0; }
-    .hud-val { color: var(--emerald); font-weight: 600; }
-
     /* Content Area */
     .docs-content {
       padding: 40px 48px 120px;
@@ -331,52 +286,43 @@
     }
 
     .doc-view { display: none; }
-    .doc-view.active { display: block; animation: fadeIn 0.2s ease-in-out; }
+    .doc-view.active { display: block; animation: fadeIn 0.15s ease-in-out; }
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
+      from { opacity: 0; transform: translateY(3px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Document Header Banner */
-    .doc-meta-banner {
-      background: radial-gradient(ellipse at 15% 0%, rgba(56, 189, 248, 0.12), transparent 60%), var(--surface-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 24px 28px;
+    /* Document Header */
+    .doc-header-block {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 22px;
       margin-bottom: 36px;
-      position: relative;
     }
-    .doc-tag-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 12px;
+    .doc-title {
+      font-size: clamp(26px, 3vw, 34px);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 8px;
+      color: #ffffff;
     }
+    .doc-subtitle {
+      font-size: 1rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* Table status badges */
     .tag {
       font-family: var(--font-mono);
       font-size: 0.72rem;
-      padding: 2px 8px;
+      padding: 2px 7px;
       border-radius: 4px;
       font-weight: 600;
       letter-spacing: 0.03em;
     }
-    .tag-cyan { background: var(--cyan-subtle); color: var(--cyan); border: 1px solid var(--cyan-border); }
-    .tag-emerald { background: var(--emerald-dim); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.25); }
-    .tag-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.25); }
-    .doc-title {
-      font-size: clamp(28px, 3.2vw, 38px);
-      font-weight: 700;
-      letter-spacing: -0.025em;
-      line-height: 1.15;
-      margin-bottom: 10px;
-      color: #ffffff;
-    }
-    .doc-subtitle {
-      font-size: 1.05rem;
-      color: var(--text-muted);
-      line-height: 1.55;
-    }
+    .tag-emerald { background: rgba(16, 185, 129, 0.1); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.25); }
+    .tag-amber { background: rgba(245, 158, 11, 0.1); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.25); }
 
     /* Markdown Typography */
     .doc-body h1, .doc-body h2, .doc-body h3, .doc-body h4 {
@@ -608,7 +554,6 @@
           <img src="assets/icon.svg" alt="ABOS Logo" class="brand-icon">
           <span>ABOS</span>
         </a>
-        <span class="doc-badge">DOCS PORTAL</span>
       </div>
 
       <div class="header-actions">
@@ -629,39 +574,20 @@
     <!-- Left Sticky Sidebar -->
     <aside class="docs-sidebar" id="sidebar">
       <div>
-        <div class="sidebar-section-title">TECHNICAL MANUALS</div>
+        <div class="sidebar-section-title">DOCUMENTS</div>
         <nav class="doc-nav-list">
-          <a class="doc-nav-item active" data-doc="whitepaper" href="#whitepaper">
-            <span>📘 Technical Whitepaper</span>
-            <span class="doc-nav-pill">Physics &amp; RF</span>
-          </a>
-          <a class="doc-nav-item" data-doc="architecture" href="#architecture">
-            <span>📐 Architecture Specification</span>
-            <span class="doc-nav-pill">13 Crates</span>
-          </a>
-          <a class="doc-nav-item" data-doc="verification" href="#verification">
-            <span>🛡️ Verification &amp; Tests</span>
-            <span class="doc-nav-pill">103 Tests Passed</span>
-          </a>
-          <a class="doc-nav-item" data-doc="guide" href="#guide">
-            <span>📖 System Guide &amp; CLI</span>
-            <span class="doc-nav-pill">Operations</span>
-          </a>
+          <a class="doc-nav-item active" data-doc="whitepaper" href="#whitepaper">Technical Whitepaper</a>
+          <a class="doc-nav-item" data-doc="architecture" href="#architecture">Architecture Specification</a>
+          <a class="doc-nav-item" data-doc="verification" href="#verification">Verification &amp; Test Matrix</a>
+          <a class="doc-nav-item" data-doc="guide" href="#guide">System Guide &amp; CLI</a>
         </nav>
       </div>
 
       <div class="doc-toc">
-        <div class="sidebar-section-title">ACTIVE DOCUMENT TOC</div>
+        <div class="sidebar-section-title">ON THIS PAGE</div>
         <ul class="toc-list" id="activeToc">
           <!-- Populated dynamically based on active document -->
         </ul>
-      </div>
-
-      <div class="sidebar-hud">
-        <div class="hud-row"><span>BUILD:</span> <span class="hud-val">CLEAN (0 WARN)</span></div>
-        <div class="hud-row"><span>TESTS:</span> <span class="hud-val">103 / 103 PASS</span></div>
-        <div class="hud-row"><span>READINESS:</span> <span class="hud-val">TIER 4 (GATED)</span></div>
-        <div class="hud-row"><span>CRATES:</span> <span class="hud-val">13 + ROOT</span></div>
       </div>
     </aside>
 
@@ -672,14 +598,9 @@
       <!-- 1. TECHNICAL WHITEPAPER -->
       <!-- ========================================================================= -->
       <article id="doc-whitepaper" class="doc-view active">
-        <div class="doc-meta-banner">
-          <div class="tag-row">
-            <span class="tag tag-cyan">PHYSICAL LAYER ARCHITECTURE</span>
-            <span class="tag tag-emerald">T4 FEATURE COMPLETE</span>
-            <span class="tag tag-amber">2026 SPECIFICATION</span>
-          </div>
-          <h1 class="doc-title">Atmospheric Broadcast OS (ABOS) &mdash; Technical Whitepaper</h1>
-          <p class="doc-subtitle">Planetary-Scale Covert NVIS Mesh &amp; Delay-Tolerant Ionospheric Relay in Pure Rust.</p>
+        <div class="doc-header-block">
+          <h1 class="doc-title">Technical Whitepaper</h1>
+          <p class="doc-subtitle">Decentralized NVIS mesh communication and delay-tolerant ionospheric relay architecture.</p>
         </div>
 
         <div class="doc-body">
@@ -879,14 +800,9 @@ Deinterleaver → Descrambler → Bundle Hash Dedup → Buffer-Bounce Forward �
       <!-- 2. SYSTEM ARCHITECTURE & SUBSYSTEM SPECIFICATION -->
       <!-- ========================================================================= -->
       <article id="doc-architecture" class="doc-view">
-        <div class="doc-meta-banner">
-          <div class="tag-row">
-            <span class="tag tag-cyan">ENGINEERING SPECIFICATION</span>
-            <span class="tag tag-emerald">13 CRATES VERIFIED</span>
-            <span class="tag tag-amber">ARCHITECTURE BLUEPRINT</span>
-          </div>
+        <div class="doc-header-block">
           <h1 class="doc-title">System Architecture &amp; Subsystem Specification</h1>
-          <p class="doc-subtitle">Layer-by-layer mathematical specifications, data structures, state machines, and protocol requirements.</p>
+          <p class="doc-subtitle">Layer-by-layer specifications, data structures, state machines, and protocol requirements across 13 crates.</p>
         </div>
 
         <div class="doc-body">
@@ -942,14 +858,9 @@ s = H · c = A·u + I·p = A·u + A·u = 0 (syndrome zero guaranteed)</code></pr
       <!-- 3. VERIFICATION & RELIABILITY MATRIX -->
       <!-- ========================================================================= -->
       <article id="doc-verification" class="doc-view">
-        <div class="doc-meta-banner">
-          <div class="tag-row">
-            <span class="tag tag-emerald">103/103 TESTS PASSING</span>
-            <span class="tag tag-cyan">TIER 4 CERTIFIED</span>
-            <span class="tag tag-amber">ZERO WARNINGS</span>
-          </div>
-          <h1 class="doc-title">Verification &amp; Reliability Matrix</h1>
-          <p class="doc-subtitle">Automated test matrix across 13 crates, fault-injection benchmarks, loopback verification, and readiness tier standards.</p>
+        <div class="doc-header-block">
+          <h1 class="doc-title">Verification &amp; Test Matrix</h1>
+          <p class="doc-subtitle">Automated test suites, fault-injection benchmarks, and loopback channel verification across all 13 crates.</p>
         </div>
 
         <div class="doc-body">
@@ -1129,13 +1040,8 @@ s = H · c = A·u + I·p = A·u + A·u = 0 (syndrome zero guaranteed)</code></pr
       <!-- 4. SYSTEM GUIDE & QUICKSTART -->
       <!-- ========================================================================= -->
       <article id="doc-guide" class="doc-view">
-        <div class="doc-meta-banner">
-          <div class="tag-row">
-            <span class="tag tag-cyan">GETTING STARTED</span>
-            <span class="tag tag-emerald">CLI REFERENCE</span>
-            <span class="tag tag-amber">WORKSPACE GUIDE</span>
-          </div>
-          <h1 class="doc-title">System Overview &amp; Command-Line Guide</h1>
+        <div class="doc-header-block">
+          <h1 class="doc-title">System Guide &amp; CLI Reference</h1>
           <p class="doc-subtitle">Operational quickstart, environment prerequisites, build commands, and 10 production subcommands.</p>
         </div>
 
