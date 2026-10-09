@@ -79,3 +79,47 @@ pub fn hmac_sha256(key: &[u8], data: &[u8]) -> [u8; 32] {
     output.copy_from_slice(&code);
     output
 }
+
+/// Cryptographic node keypair using X25519.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Keypair {
+    pub secret_key: [u8; 32],
+    pub public_key: [u8; 32],
+}
+
+impl Keypair {
+    /// Generate a fresh random keypair using OS entropy.
+    pub fn generate() -> Self {
+        let mut secret_bytes = [0u8; 32];
+        OsRng.fill_bytes(&mut secret_bytes);
+        let secret = x25519_dalek::StaticSecret::from(secret_bytes);
+        let public = x25519_dalek::PublicKey::from(&secret);
+        Self {
+            secret_key: secret_bytes,
+            public_key: *public.as_bytes(),
+        }
+    }
+
+    /// Construct a keypair from raw secret bytes.
+    pub fn from_secret_bytes(secret_bytes: [u8; 32]) -> Self {
+        let secret = x25519_dalek::StaticSecret::from(secret_bytes);
+        let public = x25519_dalek::PublicKey::from(&secret);
+        Self {
+            secret_key: secret_bytes,
+            public_key: *public.as_bytes(),
+        }
+    }
+
+    /// Derive the cryptographic NodeId (SHA-256 hash of public key).
+    pub fn node_id(&self) -> [u8; 32] {
+        node_id_from_public_key(&self.public_key)
+    }
+
+    /// Compute shared Diffie-Hellman secret with a peer's public key.
+    pub fn diffie_hellman(&self, peer_public: &[u8; 32]) -> [u8; 32] {
+        let secret = x25519_dalek::StaticSecret::from(self.secret_key);
+        let peer_pub = x25519_dalek::PublicKey::from(*peer_public);
+        let shared = secret.diffie_hellman(&peer_pub);
+        *shared.as_bytes()
+    }
+}

@@ -7,5 +7,6 @@ description = "ABOS Physical Layer - DSSS, FHSS, burst builder, beamforming"
 [dependencies]
 abos-common = { path = "../abos-common" }
 abos-dsp = { path = "../abos-dsp" }
+abos-fec = { path = "../abos-fec" }
 num-complex = "0.4"
 thiserror = "1"

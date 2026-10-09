@@ -23,18 +23,17 @@ use abos_dsp::ofdm::{OFDMDemodulator, OFDMModulator};
 use abos_dsp::pulse_shape::RRCFilter;
 use abos_dsp::timing::GardnerTiming;
 
-use abos_phy::burst::{build_burst, generate_preamble, generate_sync_word, parse_burst};
 use abos_phy::dsss::{DSSSDemodulator, DSSSModulator};
 use abos_phy::fhss::FHSSEngine;
-use abos_phy::scrambler::Scrambler;
+use abos_phy::modem::Modem;
 
-use abos_fec::crc::crc32;
 use abos_fec::interleaver::Interleaver;
 use abos_fec::ldpc::LDPCCode;
-use abos_fec::soft_decision::qpsk_llr;
 
 use abos_protocol::bounce::BufferBounceEngine;
-use abos_protocol::bundle::{create_bundle, deserialize_bundle};
+use abos_protocol::bundle::{
+    create_bundle, decrypt_bundle, deserialize_bundle, encrypt_bundle, serialize_bundle,
+};
 use abos_protocol::mesh::{Beacon, MeshNode};
 use abos_protocol::routing::DedupCache;
 use abos_protocol::schedule::PhoenixScheduler;
@@ -53,13 +52,12 @@ use abos_iono::sounder::ChirpSounder;
 
 use abos_stealth::amp_dither::AmpDither;
 use abos_stealth::burst_rand::RandomBurstScheduler;
-use abos_stealth::mask_cyclo::add_variable_symbol_rate;
 use abos_stealth::phase_noise::PhaseNoiseInjector;
 
 use abos_storage::bundle_store::BundleStore;
 use abos_storage::config::SystemConfig;
 
-use abos_common::crypto::{generate_seed, node_id_from_public_key};
+use abos_common::crypto::{derive_key, Keypair};
 use abos_common::error::{Error, Result};
 use abos_common::types::*;
 
@@ -71,24 +69,40 @@ use num_complex::Complex64;
 /// Protocol → Storage → Cognitive → Stealth → Ionospheric sounding.
 pub struct ABOSSystem {
     config: SystemConfig,
+    #[allow(dead_code)]
+    keypair: Keypair,
     sdr: Box<dyn SDRDevice>,
+    modem: Modem,
     #[allow(dead_code)]
     dma_buffer: DMABuffer,
     gpio: GPIO,
     #[allow(dead_code)]
     timer: GPSDOTimer,
+    #[allow(dead_code)]
     ddc: DDC,
+    #[allow(dead_code)]
     agc: AGC,
+    #[allow(dead_code)]
     iq_correct: IQCorrect,
+    #[allow(dead_code)]
     costas: CostasLoop,
+    #[allow(dead_code)]
     timing: GardnerTiming,
+    #[allow(dead_code)]
     ofdm_mod: OFDMModulator,
+    #[allow(dead_code)]
     ofdm_demod: OFDMDemodulator,
+    #[allow(dead_code)]
     rrc: RRCFilter,
+    #[allow(dead_code)]
     dsss_mod: Option<DSSSModulator>,
+    #[allow(dead_code)]
     dsss_demod: Option<DSSSDemodulator>,
+    #[allow(dead_code)]
     fhss: Option<FHSSEngine>,
+    #[allow(dead_code)]
     ldpc: LDPCCode,
+    #[allow(dead_code)]
     interleaver: Interleaver,
     scanner: SpectrumScanner,
     adaptive: AdaptiveController,
@@ -113,11 +127,17 @@ impl ABOSSystem {
         Self::with_config(config).await
     }
 
-    /// Create a new ABOS system with a specific configuration.
+    /// Create a new ABOS system with a specific configuration and default SDR.
     pub async fn with_config(config: SystemConfig) -> Result<Self> {
-        let seed = generate_seed();
-        let node_id = node_id_from_public_key(&seed);
         let sdr = create_sdr(SDRType::LimeSDR);
+        Self::with_sdr(config, sdr).await
+    }
+
+    /// Create a new ABOS system with a custom SDR backend (e.g. LoopbackSDR for tests or simulation).
+    pub async fn with_sdr(mut config: SystemConfig, mut sdr: Box<dyn SDRDevice>) -> Result<Self> {
+        let keypair = config.load_or_create_identity()?;
+        let node_id = keypair.node_id();
+        let shared_seed = config.shared_seed;
 
         // Configure SDR
         let sdr_config = SDRConfig {
@@ -127,6 +147,9 @@ impl ABOSSystem {
             bandwidth: config.bandwidth,
             antenna_port: 0,
         };
+        sdr.configure(sdr_config)?;
+
+        let modem = Modem::with_seed(config.dsss_chips, shared_seed);
 
         let agc = AGC::default();
         let iq_correct = IQCorrect::default();
@@ -158,7 +181,9 @@ impl ABOSSystem {
 
         let mut system = Self {
             config,
+            keypair,
             sdr,
+            modem,
             dma_buffer,
             gpio,
             timer,
@@ -187,21 +212,13 @@ impl ABOSSystem {
             burst_scheduler,
             running: false,
             node_id,
-            shared_seed: seed,
+            shared_seed,
         };
 
-        system.configure_sdr(sdr_config)?;
-        // Open the persistent bundle store from the configured data dir so
-        // store-and-forward works out of the box (T4: was never initialized).
         if let Some(p) = store_path.to_str() {
-            // Best effort: an unwritable data dir must not prevent boot.
             let _ = system.init_bundle_store(p);
         }
         Ok(system)
-    }
-
-    fn configure_sdr(&mut self, config: SDRConfig) -> Result<()> {
-        self.sdr.configure(config)
     }
 
     /// Start the SDR stream and all processing chains.
@@ -229,8 +246,9 @@ impl ABOSSystem {
 
     /// Transmit a payload through the full RF chain.
     ///
-    /// Steps: Shard split → Bundle → Scramble → Interleave → FEC encode → DSSS spread →
-    /// OFDM modulate → RRC filter → Stealth mask → Burst build → SDR TX
+    /// Steps: Shard split → Encrypted DTN Bundle → Length frame → Scramble →
+    /// LDPC encode → Bit interleave → QPSK → OFDM modulate → (optional DSSS spread) →
+    /// (optional Stealth mask) → SDR TX
     pub async fn transmit(&mut self, data: &[u8]) -> Result<()> {
         if !self.running {
             return Err(Error::ConfigError("System not started".into()));
@@ -239,86 +257,34 @@ impl ABOSSystem {
         let shards = split_file(data, 1024, 1.5);
 
         for shard in &shards {
-            let bundle = create_bundle(
+            let mut bundle = create_bundle(
                 &bincode::serialize(shard).map_err(|e| Error::ProtocolError(e.to_string()))?,
                 self.node_id,
                 3600,
             );
 
-            let mut scrambler = Scrambler::default();
-            let scrambled = scrambler.scramble(&bundle.payload);
+            // Encrypt bundle payload with shared network secret derived from shared_seed
+            let enc_key = derive_key(&self.shared_seed, b"abos-bundle-encryption");
+            encrypt_bundle(&enc_key, &mut bundle)?;
 
-            let bits: Vec<u8> = scrambled
-                .iter()
-                .flat_map(|&b| (0..8).map(move |i| (b >> i) & 0x01))
-                .collect();
-            let interleaved = self.interleaver.interleave(&bits);
-            let encoded = self.ldpc.encode(&interleaved);
+            let serialized_bundle = serialize_bundle(&bundle)?;
+            let mut samples = self.modem.transmit(&serialized_bundle);
 
-            // Modulate encoded bits to QPSK symbols
-            let symbols: Vec<Complex64> = encoded
-                .chunks(2)
-                .map(|chunk| {
-                    let b = (chunk[0] << 1) | chunk[1];
-                    match b {
-                        0 => Complex64::new(1.0, 1.0),
-                        1 => Complex64::new(-1.0, 1.0),
-                        2 => Complex64::new(-1.0, -1.0),
-                        _ => Complex64::new(1.0, -1.0),
-                    }
-                })
-                .collect();
-
-            let ofdm_symbols = self.ofdm_mod.modulate(&symbols);
-            let shaped = self.rrc.process(&ofdm_symbols);
-
-            let spread = if let Some(ref mut dsss) = self.dsss_mod {
-                dsss.spread(&shaped)
-            } else {
-                shaped
-            };
-
-            // Anti-EW stealth: cyclostationary masking, phase noise, and scintillation dither
-            let masked = add_variable_symbol_rate(&spread, 0.01);
-            let masked = self.phase_noise.inject_noise(&masked);
-            let masked = self.amp_dither.apply_dither(&masked);
-
-            let preamble = generate_preamble(32);
-            let sync_word = generate_sync_word(&self.shared_seed);
-            let packet = BurstPacket {
-                preamble,
-                sync_word,
-                header: BurstHeader {
-                    mcs: MCS::Qpsk12,
-                    shard_id: bundle.bundle_id,
-                    length_bytes: masked.len() as u32,
-                    crc: crc32(
-                        &masked
-                            .iter()
-                            .flat_map(|c| {
-                                let b = vec![c.re.to_bits(), c.im.to_bits()];
-                                b.into_iter().flat_map(|v| v.to_le_bytes().to_vec())
-                            })
-                            .collect::<Vec<u8>>(),
-                    ),
-                },
-                payload: masked,
-            };
-            let burst_samples = build_burst(&packet);
+            // Anti-EW stealth dither if enabled
+            if self.config.stealth_enabled {
+                samples = self.phase_noise.inject_noise(&samples);
+                samples = self.amp_dither.apply_dither(&samples);
+            }
 
             self.gpio.set_tr_switch(true); // TX mode
-            self.sdr.write_samples(&burst_samples)?;
+            self.sdr.write_samples(&samples)?;
             self.gpio.set_tr_switch(false); // Back to RX
 
-            let s: Shard = bincode::deserialize(&bundle.payload)
-                .map_err(|e| Error::ProtocolError(e.to_string()))?;
-            self.bounce.submit_shard(
-                s,
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-            );
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            self.bounce.submit_shard(shard.clone(), now);
             self.mesh.track_bundle(&bundle);
         }
 
@@ -327,8 +293,9 @@ impl ABOSSystem {
 
     /// Receive and process IQ samples through the full RX chain.
     ///
-    /// Steps: SDR RX → Burst parse → Sync correlate → Despread → RRC → OFDM demod →
-    /// Soft LLR → FEC decode → Deinterleave → Descramble → Bundle → Shard reconstruct
+    /// Steps: SDR RX → (optional DSSS despread) → OFDM demod → Soft QPSK LLR →
+    /// Deinterleave → LDPC decode → Descramble → Length unframe → Bundle deserialize →
+    /// AES Decrypt → Dedup check → Bundle store → Shard reconstruct
     pub async fn receive(&mut self, buffer: &mut [Complex64]) -> Result<Vec<u8>> {
         if !self.running {
             return Err(Error::ConfigError("System not started".into()));
@@ -340,84 +307,45 @@ impl ABOSSystem {
         }
 
         let samples = &buffer[..n];
-        let baseband = self.ddc.process(samples);
-        let corrected = self.iq_correct.process(&baseband);
-        let leveled = self.agc.process(&corrected);
-        let synced: Vec<Complex64> = leveled.iter().map(|&s| self.costas.process(s)).collect();
-        let timed = self.timing.process(&synced);
+        let decoded_bytes = self.modem.receive(samples, 0.0)?;
+        let mut bundle = deserialize_bundle(&decoded_bytes)?;
 
-        if let Some(packet) = parse_burst(&timed, &self.shared_seed) {
-            let payload = packet.payload;
+        // Decrypt bundle payload
+        let enc_key = derive_key(&self.shared_seed, b"abos-bundle-encryption");
+        decrypt_bundle(&enc_key, &mut bundle)?;
 
-            let despread = if let Some(ref mut dsss) = self.dsss_demod {
-                dsss.despread(&payload)
-            } else {
-                payload
-            };
-
-            let (data_syms, _pilots) = self.ofdm_demod.demodulate(&despread);
-
-            // Compute soft-decision LLRs for QPSK under AWGN channel model
-            let noise_var = 0.1;
-            let mut llrs = Vec::with_capacity(data_syms.len() * 2);
-            for sym in &data_syms {
-                let (llr0, llr1) = qpsk_llr(*sym, noise_var);
-                llrs.push(llr0);
-                llrs.push(llr1);
-            }
-
-            let decoded = self.ldpc.decode(&llrs, 50)?;
-            let deinterleaved = self.interleaver.deinterleave(&decoded);
-
-            let bytes: Vec<u8> = deinterleaved
-                .chunks(8)
-                .map(|chunk| {
-                    chunk
-                        .iter()
-                        .enumerate()
-                        .fold(0u8, |acc, (i, &b)| acc | (b << i))
-                })
-                .collect();
-
-            let mut scrambler = Scrambler::default();
-            let descrambled = scrambler.descramble(&bytes);
-            let bundle = deserialize_bundle(&descrambled)?;
-
-            if self.dedup.check_and_insert(bundle.bundle_id) {
-                return Err(Error::ProtocolError("Duplicate bundle".into()));
-            }
-
-            let is_new = if let Some(ref store) = self.bundle_store {
-                store.store_bundle(&bundle)?
-            } else {
-                true
-            };
-
-            let s: Shard = bincode::deserialize(&bundle.payload)
-                .map_err(|e| Error::ProtocolError(e.to_string()))?;
-
-            self.bounce.record_complementary_shard(s.clone());
-            self.mesh
-                .record_availability_from_shard(&s, bundle.source_node);
-
-            // Re-broadcast and track ACKs if flooding policy permits
-            if is_new && self.mesh.should_forward_bundle(&bundle) {
-                let mut fwd = bundle.clone();
-                abos_protocol::routing::increment_hop(&mut fwd);
-                let fshard: Shard = bincode::deserialize(&fwd.payload)
-                    .map_err(|e| Error::ProtocolError(e.to_string()))?;
-                let now = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs();
-                self.bounce.submit_shard(fshard, now);
-                self.mesh.track_bundle(&fwd);
-            }
-
-            return Ok(bundle.payload);
+        if self.dedup.check_and_insert(bundle.bundle_id) {
+            return Err(Error::ProtocolError("Duplicate bundle".into()));
         }
 
-        Err(Error::SyncLost)
+        let is_new = if let Some(ref store) = self.bundle_store {
+            store.store_bundle(&bundle)?
+        } else {
+            true
+        };
+
+        let s: Shard = bincode::deserialize(&bundle.payload)
+            .map_err(|e| Error::ProtocolError(e.to_string()))?;
+
+        self.bounce.record_complementary_shard(s.clone());
+        self.mesh
+            .record_availability_from_shard(&s, bundle.source_node);
+
+        // Re-broadcast and track ACKs if flooding policy permits
+        if is_new && self.mesh.should_forward_bundle(&bundle) {
+            let mut fwd = bundle.clone();
+            abos_protocol::routing::increment_hop(&mut fwd);
+            let fshard: Shard = bincode::deserialize(&fwd.payload)
+                .map_err(|e| Error::ProtocolError(e.to_string()))?;
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            self.bounce.submit_shard(fshard, now);
+            self.mesh.track_bundle(&fwd);
+        }
+
+        Ok(bundle.payload)
     }
 
     /// Scan the spectrum and return the power spectral density.
@@ -460,8 +388,10 @@ impl ABOSSystem {
         self.running
     }
 
-    /// Initialize DSSS with a seed.
+    /// Initialize DSSS spreading.
     pub fn init_dsss(&mut self, chips_per_symbol: usize) {
+        self.modem
+            .set_dsss(Some(chips_per_symbol), self.shared_seed);
         self.dsss_mod = Some(DSSSModulator::new(&self.shared_seed, chips_per_symbol));
         self.dsss_demod = Some(DSSSDemodulator::new(&self.shared_seed, chips_per_symbol));
     }
@@ -581,7 +511,6 @@ impl ABOSSystem {
 
 impl Drop for ABOSSystem {
     fn drop(&mut self) {
-        // Ensure SDR is stopped on drop
         let _ = self.sdr.stop_stream();
     }
 }
@@ -589,18 +518,17 @@ impl Drop for ABOSSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use abos_hal::sdr::LoopbackSDR;
 
-    #[test]
-    fn test_system_creation() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let system = rt.block_on(ABOSSystem::new());
+    #[tokio::test]
+    async fn test_system_creation() {
+        let system = ABOSSystem::new().await;
         assert!(system.is_ok());
     }
 
     #[test]
     fn test_estimate_fo_f2() {
         let fo_f2 = ABOSSystem::estimate_fo_f2(1e12);
-        // f_p ≈ 9·√N_e = 9·√(1e12) = 9·1e6 = 9,000,000 Hz
         assert!((fo_f2 - 9_000_000.0).abs() < 1.0);
     }
 
@@ -623,5 +551,41 @@ mod tests {
         history.push(25.0);
         assert!(ABOSSystem::detect_meteor(&history));
         assert!(!ABOSSystem::detect_meteor(&[1.0, 2.0]));
+    }
+
+    #[tokio::test]
+    async fn test_two_nodes_loopback_roundtrip() {
+        let (sdr_a, sdr_b) = LoopbackSDR::pair();
+
+        let config_a = SystemConfig {
+            data_dir: std::env::temp_dir().join(format!("abos_test_a_{}", std::process::id())),
+            ..Default::default()
+        };
+        let config_b = SystemConfig {
+            data_dir: std::env::temp_dir().join(format!("abos_test_b_{}", std::process::id())),
+            ..Default::default()
+        };
+
+        let mut node_a = ABOSSystem::with_sdr(config_a, Box::new(sdr_a))
+            .await
+            .unwrap();
+        let mut node_b = ABOSSystem::with_sdr(config_b, Box::new(sdr_b))
+            .await
+            .unwrap();
+
+        node_a.start().await.unwrap();
+        node_b.start().await.unwrap();
+
+        let payload = b"Hello from Node A across atmospheric ionosphere!";
+        node_a.transmit(payload).await.unwrap();
+
+        let mut rx_buf = vec![Complex64::default(); 65536];
+        let received = node_b
+            .receive(&mut rx_buf)
+            .await
+            .expect("Node B should receive message");
+
+        let shard: Shard = bincode::deserialize(&received).expect("Deserialization of shard");
+        assert_eq!(&shard.data[..payload.len()], payload);
     }
 }

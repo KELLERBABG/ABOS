@@ -100,6 +100,159 @@ impl LoopbackChannel {
     }
 }
 
+/// An ionospheric multipath path in the Watterson channel model (ITU-R 520).
+#[derive(Debug, Clone)]
+pub struct WattersonPath {
+    /// Relative delay of this path in samples.
+    pub delay_samples: usize,
+    /// Linear amplitude gain of this path (e.g. 1.0).
+    pub gain: f64,
+    /// Doppler shift in Hz.
+    pub doppler_shift_hz: f64,
+    /// Doppler 2-sigma spread in Hz (Rayleigh fading speed).
+    pub doppler_spread_hz: f64,
+}
+
+/// ITU-R 520 Watterson HF ionospheric multipath fading channel simulator.
+///
+/// Simulates NVIS and long-range HF skywave links with discrete ionospheric reflections,
+/// differential multipath delay, Rayleigh fading, Doppler shift, and thermal AWGN.
+pub struct WattersonChannel {
+    paths: Vec<WattersonPath>,
+    sample_rate: f64,
+    noise_rms: f64,
+    rng: StdRng,
+}
+
+impl WattersonChannel {
+    /// Create a custom Watterson channel.
+    pub fn new(paths: Vec<WattersonPath>, sample_rate: f64, noise_rms: f64, seed: u64) -> Self {
+        Self {
+            paths,
+            sample_rate,
+            noise_rms,
+            rng: StdRng::seed_from_u64(seed),
+        }
+    }
+
+    /// CCIR "Good" conditions: 2 paths, 0.5 ms differential delay, 0.1 Hz Doppler spread.
+    pub fn ccir_good(sample_rate: f64, noise_rms: f64, seed: u64) -> Self {
+        let delay_samples = (0.0005 * sample_rate) as usize;
+        let paths = vec![
+            WattersonPath {
+                delay_samples: 0,
+                gain: 1.0,
+                doppler_shift_hz: 0.0,
+                doppler_spread_hz: 0.1,
+            },
+            WattersonPath {
+                delay_samples,
+                gain: 0.7,
+                doppler_shift_hz: 0.1,
+                doppler_spread_hz: 0.1,
+            },
+        ];
+        Self::new(paths, sample_rate, noise_rms, seed)
+    }
+
+    /// CCIR "Moderate" conditions: 2 paths, 1.0 ms differential delay, 0.5 Hz Doppler spread.
+    pub fn ccir_moderate(sample_rate: f64, noise_rms: f64, seed: u64) -> Self {
+        let delay_samples = (0.001 * sample_rate) as usize;
+        let paths = vec![
+            WattersonPath {
+                delay_samples: 0,
+                gain: 1.0,
+                doppler_shift_hz: 0.0,
+                doppler_spread_hz: 0.5,
+            },
+            WattersonPath {
+                delay_samples,
+                gain: 0.5,
+                doppler_shift_hz: 0.5,
+                doppler_spread_hz: 0.5,
+            },
+        ];
+        Self::new(paths, sample_rate, noise_rms, seed)
+    }
+
+    /// CCIR "Poor" conditions: 2 paths, 2.0 ms differential delay, 1.0 Hz Doppler spread.
+    pub fn ccir_poor(sample_rate: f64, noise_rms: f64, seed: u64) -> Self {
+        let delay_samples = (0.002 * sample_rate) as usize;
+        let paths = vec![
+            WattersonPath {
+                delay_samples: 0,
+                gain: 1.0,
+                doppler_shift_hz: 0.0,
+                doppler_spread_hz: 1.0,
+            },
+            WattersonPath {
+                delay_samples,
+                gain: 0.5,
+                doppler_shift_hz: 1.0,
+                doppler_spread_hz: 1.0,
+            },
+        ];
+        Self::new(paths, sample_rate, noise_rms, seed)
+    }
+
+    /// Deliver I/Q samples across the Watterson multipath channel.
+    pub fn deliver_samples(&mut self, samples: &[Complex64]) -> Vec<Complex64> {
+        if samples.is_empty() {
+            return Vec::new();
+        }
+
+        let max_delay = self
+            .paths
+            .iter()
+            .map(|p| p.delay_samples)
+            .max()
+            .unwrap_or(0);
+        let out_len = samples.len() + max_delay;
+        let mut out = vec![Complex64::new(0.0, 0.0); out_len];
+
+        let paths = self.paths.clone();
+        for path in &paths {
+            let mut phase = self.rng.gen::<f64>() * 2.0 * std::f64::consts::PI;
+            let phase_step = 2.0 * std::f64::consts::PI * path.doppler_shift_hz / self.sample_rate;
+
+            for (i, &s) in samples.iter().enumerate() {
+                phase += phase_step;
+                // Rayleigh tap fading variation
+                let fade_re = Self::sample_gaussian(&mut self.rng)
+                    * (path.doppler_spread_hz * 0.01).max(0.05);
+                let fade_im = Self::sample_gaussian(&mut self.rng)
+                    * (path.doppler_spread_hz * 0.01).max(0.05);
+                let tap = Complex64::new(
+                    path.gain * phase.cos() + fade_re,
+                    path.gain * phase.sin() + fade_im,
+                );
+                let prod = s * tap;
+                let dest_idx = i + path.delay_samples;
+                if dest_idx < out.len() {
+                    out[dest_idx] += prod;
+                }
+            }
+        }
+
+        // Add AWGN thermal noise
+        if self.noise_rms > 0.0 {
+            for item in &mut out {
+                let n_re = Self::sample_gaussian(&mut self.rng) * self.noise_rms;
+                let n_im = Self::sample_gaussian(&mut self.rng) * self.noise_rms;
+                *item += Complex64::new(n_re, n_im);
+            }
+        }
+
+        out
+    }
+
+    fn sample_gaussian(rng: &mut StdRng) -> f64 {
+        let u1: f64 = rng.gen::<f64>().max(f64::EPSILON);
+        let u2: f64 = rng.gen();
+        (-2.0 * u1.ln()).sqrt() * (2.0 * std::f64::consts::PI * u2).cos()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +315,24 @@ mod tests {
         let input = vec![Complex64::new(1.0, -1.0); 16];
         let out = LoopbackChannel::clean().deliver_samples(&input);
         assert_eq!(out, input);
+    }
+
+    #[test]
+    fn watterson_channel_reproducibility_and_propagation() {
+        let input: Vec<Complex64> = (0..128)
+            .map(|i| Complex64::new((i as f64 * 0.05).cos(), (i as f64 * 0.05).sin()))
+            .collect();
+        let mut ch1 = WattersonChannel::ccir_good(1_000_000.0, 0.01, 12345);
+        let mut ch2 = WattersonChannel::ccir_good(1_000_000.0, 0.01, 12345);
+
+        let out1 = ch1.deliver_samples(&input);
+        let out2 = ch2.deliver_samples(&input);
+
+        assert_eq!(out1.len(), out2.len());
+        assert!(out1.len() >= input.len());
+        for (a, b) in out1.iter().zip(out2.iter()) {
+            assert_eq!(a.re.to_bits(), b.re.to_bits());
+            assert_eq!(a.im.to_bits(), b.im.to_bits());
+        }
     }
 }

@@ -58,6 +58,12 @@ enum Commands {
     Mesh,
     /// Show the retransmit/forwarding queue and stored bundles
     Forward,
+    /// Run as a long-running background daemon servicing mesh, beacons, and reception
+    Daemon {
+        /// Local node alias for discovery beacons
+        #[arg(short, long, default_value = "ghost-node")]
+        alias: String,
+    },
 }
 
 fn hex32(bytes: &[u8; 32]) -> String {
@@ -95,6 +101,7 @@ pub fn run() -> i32 {
         } => cmd_chirp(start_mhz, stop_mhz, duration_s),
         Commands::Mesh => cmd_mesh(),
         Commands::Forward => cmd_forward(),
+        Commands::Daemon { alias } => cmd_daemon(&alias),
     }
 }
 
@@ -206,7 +213,7 @@ fn cmd_receive(attempts: u32) -> i32 {
                     return 1;
                 }
                 println!("[ABOS] Waiting for bursts ({} attempts)...", attempts);
-                let mut buffer = vec![num_complex::Complex64::new(0.0, 0.0); 4096];
+                let mut buffer = vec![num_complex::Complex64::new(0.0, 0.0); 65536];
                 let mut exit = 1;
                 for _ in 0..attempts {
                     match system.receive(&mut buffer).await {
@@ -409,6 +416,71 @@ fn cmd_forward() -> i32 {
             }
             Err(e) => {
                 eprintln!("[ABOS] Forward query failed: {}", e);
+                1
+            }
+        }
+    })
+}
+
+fn cmd_daemon(alias: &str) -> i32 {
+    println!("[ABOS] Launching daemon mode (alias: '{}')...", alias);
+    let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+    rt.block_on(async {
+        match ABOSSystem::new().await {
+            Ok(mut system) => {
+                if let Err(e) = system.start().await {
+                    eprintln!("[ABOS] Failed to start daemon: {}", e);
+                    return 1;
+                }
+                println!("[ABOS] Daemon active on node {}", hex32(&system.node_id()));
+                println!("[ABOS] Mesh discovery, opportunistic DTN relay, and receiver active.");
+                println!("[ABOS] Press Ctrl+C to terminate daemon.");
+
+                let mut rx_buf = vec![num_complex::Complex64::default(); 65536];
+                let mut beacon_ticker = tokio::time::interval(tokio::time::Duration::from_secs(5));
+
+                loop {
+                    tokio::select! {
+                        _ = tokio::signal::ctrl_c() => {
+                            println!("\n[ABOS] Shutdown signal received.");
+                            break;
+                        }
+                        _ = beacon_ticker.tick() => {
+                            if let Some(beacon) = system.maybe_emit_beacon(alias) {
+                                println!("[ABOS] Broadcast discovery beacon (ts: {})", beacon.timestamp);
+                            }
+                            let expired = system.expire_mesh_peers();
+                            if expired > 0 {
+                                println!("[ABOS] Expired {} inactive mesh peers", expired);
+                            }
+                            let retx = system.retransmit_queue();
+                            if !retx.is_empty() {
+                                println!("[ABOS] {} bundles queued for retransmission", retx.len());
+                            }
+                        }
+                        res = system.receive(&mut rx_buf) => {
+                            match res {
+                                Ok(payload) => {
+                                    println!("[ABOS] Received bundle payload: {} bytes", payload.len());
+                                }
+                                Err(abos_common::error::Error::Timeout) => {
+                                    // SDR read timeout / no samples, normal idle loop
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                                }
+                                Err(abos_common::error::Error::SyncLost) => {}
+                                Err(_) => {
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                                }
+                            }
+                        }
+                    }
+                }
+                let _ = system.stop().await;
+                println!("[ABOS] Daemon stopped cleanly.");
+                0
+            }
+            Err(e) => {
+                eprintln!("[ABOS] Failed to initialize: {}", e);
                 1
             }
         }

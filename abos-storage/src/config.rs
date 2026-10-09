@@ -1,7 +1,12 @@
+use abos_common::crypto::Keypair;
 use abos_common::error::Result;
 use abos_common::types::{FrequencyHz, SampleRate, MCS};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+fn default_shared_seed() -> [u8; 32] {
+    [0x42u8; 32]
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemConfig {
@@ -14,6 +19,12 @@ pub struct SystemConfig {
     pub default_mcs: MCS,
     pub data_dir: PathBuf,
     pub log_level: String,
+    #[serde(default = "default_shared_seed")]
+    pub shared_seed: [u8; 32],
+    #[serde(default)]
+    pub stealth_enabled: bool,
+    #[serde(default)]
+    pub dsss_chips: Option<usize>,
 }
 
 impl Default for SystemConfig {
@@ -28,6 +39,9 @@ impl Default for SystemConfig {
             default_mcs: MCS::Bpsk12,
             data_dir: PathBuf::from("./data"),
             log_level: String::from("info"),
+            shared_seed: default_shared_seed(),
+            stealth_enabled: false,
+            dsss_chips: None,
         }
     }
 }
@@ -54,5 +68,26 @@ impl SystemConfig {
             .map_err(|e| abos_common::error::Error::ConfigError(e.to_string()))?;
         std::fs::write(&config_path, data).map_err(abos_common::error::Error::IoError)?;
         Ok(())
+    }
+
+    /// Load persistent cryptographic identity from `data_dir/identity.json` or create a new one.
+    pub fn load_or_create_identity(&mut self) -> Result<Keypair> {
+        let _ = std::fs::create_dir_all(&self.data_dir);
+        let id_path = self.data_dir.join("identity.json");
+        if id_path.exists() {
+            if let Ok(data) = std::fs::read_to_string(&id_path) {
+                if let Ok(keypair) = serde_json::from_str::<Keypair>(&data) {
+                    self.node_id = keypair.node_id();
+                    return Ok(keypair);
+                }
+            }
+        }
+
+        let keypair = Keypair::generate();
+        self.node_id = keypair.node_id();
+        if let Ok(data) = serde_json::to_string_pretty(&keypair) {
+            let _ = std::fs::write(&id_path, data);
+        }
+        Ok(keypair)
     }
 }
